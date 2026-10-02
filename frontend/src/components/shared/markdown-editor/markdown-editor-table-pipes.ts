@@ -1,8 +1,13 @@
+import { Lexer } from 'marked';
+
 // marked's GFM table tokenizer splits every row on raw `|` BEFORE inline tokenization, so a pipe inside a
 // code span (`` `x | y` ``), a Go-template action (`{{.X | upper}}`), or a URL (`[x](http://a|b)`, a bare
 // `http://a|b`, an image src) in a cell creates a phantom column and the trailing cells are silently DROPPED
 // on load. The splitter does honor `\|` — and unescapes it in the cell text — so pre-escaping those pipes
-// before marked lexes protects the load side the same way TunedTable's renderChildren escape protects save.
+// before marked lexes protects the load side the same way escapeCellPipes in cellText protects save. The
+// Lexer asks for a stand-in character instead of `\|` (see TABLE_PIPE): it is not a pipe to the splitter
+// either, it is put back as a pipe wherever it lands, and it tells a pipe that was written bare from one the
+// author escaped.
 //
 // Scope must match EXACTLY the rows marked itself treats as the table — no more, no less:
 //   • the header/delimiter pair must already parse as a table (matching cell counts, delimiter has |/:) —
@@ -11,11 +16,8 @@
 //   • the leading/trailing pipe is OPTIONAL in GFM, so the header row AND every body row are transformed
 //     (marked's own gfmTable body capture — `(?!blank|hr|heading|blockquote|code|fences|list).*` — has no
 //     leading-pipe requirement; gating on a leading `|` dropped cells for the common no-outer-pipe style);
-//   • a table's rows run until a blank line or the start of another block (mirrored by ENDS_TABLE_BODY);
+//   • a table's rows run until a blank line or the start of another block (isTableBodyEnd);
 //   • fenced code blocks are never touched.
-// Not covered: an HTML-block line (a standard block tag) immediately following a table with no blank line —
-// marked would end the table there; we do not replicate its HTML-block interrupt (vanishingly rare in this
-// content, and our html tokenizers render such lines as literal text anyway).
 
 // Capture the full fence run (not a fixed 3) plus the trailing text: renderTunedCodeBlock widens a fence to
 // 4+ backticks when its content holds a ``` line, and CommonMark closes a fence only with a run of the same
@@ -27,35 +29,38 @@
 const FENCE_LINE = /^ {0,3}(`{3,}(?=[^`\n]*$)|~{3,})(.*)$/;
 // Written to be linear: the trailing `(?: *\|)? *$` (not `\|? *$`) plus per-cell spacing keep any two space
 // runs from competing for the same characters, so a crafted delimiter-looking line can't force O(n²) backtracking.
-const TABLE_DELIMITER_LINE = /^ {0,3}\|? *:?-+:?(?: *\| *:?-+:?)*(?: *\|)? *$/;
-export const TEMPLATE_ACTION = /\{\{[^{}]*\}\}/g;
+export const TABLE_DELIMITER_LINE = /^ {0,3}\|? *:?-+:?(?: *\| *:?-+:?)*(?: *\|)? *$/;
+// A Go template action. A lone brace inside it — `{{ printf "{%s}" .X }}` — is part of it, and so is `}}`
+// inside a string, a rune or a comment. Every character has one reading and none of them runs over `{{`, so a
+// scan that fails stops at the next one, which keeps it linear.
+export const TEMPLATE_ACTION =
+    /\{\{(?:\/\*(?:[^*{]|\*(?!\/)|\{(?!\{))*\*\/|"(?:\\.|[^"\\\n{]|\{(?!\{))*"|`(?:[^`{]|\{(?!\{))*`|'(?:\\.|[^'\\\n{}])'|'(?!(?:\\.|[^'\\\n{}])')|\/(?!\*)|[^{}"`'/]|\{(?!\{)|\}(?!\}))*\}\}/g;
+// A line that opens with a control action is the template's own line: `{{ range .Rows }}` and `{{ end }}`
+// around the rows of a table are not rows of it, and read as rows they are padded into cells.
+const TEMPLATE_CONTROL_LINE = /^ {0,3}\{\{-?[ \t]*(?:range|if|else|end|with|define|template|block|break|continue)\b/;
 // A pipe inside a Go action is the template's pipeline operator, never a column separator — marked's splitter
 // does not know that, so the scanner masks those pipes before counting. Without this the serializer cannot
 // stop escaping them: an unescaped pipeline in the HEADER row would count one cell too many, detection would
 // bail, and marked would degrade the whole table to a paragraph.
 const maskActionPipes = (row: string): string => row.replace(TEMPLATE_ACTION, (action) => action.replace(/\|/g, ''));
-// One blockquote marker (`>` + an optional space). The line scanner only recognizes top-level tables, but marked
+// One blockquote marker (`>` + an optional space or tab, as marked takes it). The line scanner only recognizes top-level tables, but marked
 // strips this prefix and re-lexes the inner content, so a table inside a blockquote needs the prefix removed
 // before detection — see the recursive handling in escapeTablePipes.
-const BLOCKQUOTE_PREFIX = /^ {0,3}> ?/;
+const BLOCKQUOTE_PREFIX = /^ {0,3}>[ \t]?/;
 // A list item whose content actually starts on the same line. CommonMark puts that content at the column after
 // the marker plus its following spaces, except that 5+ spaces mean the item opens with indented code and the
 // content column is one past the marker.
 const LIST_ITEM_START = /^( {0,3})([*+-]|\d{1,9}[.)])( +)(?=\S)/;
 
-// A table's body ends at a blank line or the first line that starts a different block — the same interrupts
-// marked's gfmTable body-row negative lookahead lists (heading, blockquote, fences, list, hr, indented code).
-const ENDS_TABLE_BODY = [
-    /^[ \t]*$/,
-    FENCE_LINE,
-    /^ {0,3}#{1,6}(?: |\t|$)/,
-    /^ {0,3}>/,
-    /^ {0,3}(?:[*+-]|1[.)])[ \t]/,
-    /^ {0,3}(?:(?:- *){3,}|(?:_ *){3,}|(?:\* *){3,})$/,
-    /^(?: {4}| {0,3}\t)/,
-];
+// A table's body ends at a blank line or the first line that starts a different block. Which lines those are
+// is read off marked's own table rule — its body rows are `(?:(?!…).*(?:\n|$))*` — so the two cannot drift
+// apart: a standard HTML block tag ends a table too. The writer asks the same question before it puts text
+// on the line right under a table. A marked whose rule has another shape leaves only the blank line.
+const BODY_ROWS = /\(\?:\\n\(\(\?:\(\?!(.*)\)\.\*\(\?:\\n\|\$\)\)\*\)\\n\*\|\$\)$/;
+const ENDS_TABLE_BODY = new RegExp(`^(?:${BODY_ROWS.exec(Lexer.rules.block.gfm.table.source)?.[1] ?? ' *\\n'})`);
 
-const isTableBodyEnd = (line: string): boolean => ENDS_TABLE_BODY.some((rule) => rule.test(line));
+// The rule reads a line with the line break that ends it.
+export const isTableBodyEnd = (line: string): boolean => ENDS_TABLE_BODY.test(`${line}\n`);
 
 const isEscapedAt = (text: string, offset: number): boolean => {
     let isEscaped = false;
@@ -68,8 +73,13 @@ const isEscapedAt = (text: string, offset: number): boolean => {
     return isEscaped;
 };
 
-const escapeUnescapedPipes = (text: string): string =>
-    text.replace(/\|/g, (pipe, offset: number, source: string) => (isEscapedAt(source, offset) ? pipe : '\\|'));
+// What a protected pipe is written as while marked lexes the document: a private-use character that the Lexer
+// turns back into a pipe in every token. A scan that takes a line for a row which marked does not then leaves
+// nothing behind, where `\|` would stay in the text as a backslash.
+export const TABLE_PIPE = '\uE002';
+
+const escapeUnescapedPipes = (text: string, escaped: string): string =>
+    text.replace(/\|/g, (pipe, offset: number, source: string) => (isEscapedAt(source, offset) ? pipe : escaped));
 
 // Mirrors marked's splitCells: split on unescaped pipes, drop a blank leading/trailing cell.
 const countCells = (row: string): number => {
@@ -88,7 +98,7 @@ const countCells = (row: string): number => {
     return cells.length;
 };
 
-const findCodeSpanCloser = (row: string, from: number, runLength: number): number => {
+export const findCodeSpanCloser = (row: string, from: number, runLength: number): number => {
     for (let index = from; index < row.length; index++) {
         if (row[index] !== '`') {
             continue;
@@ -110,7 +120,7 @@ const findCodeSpanCloser = (row: string, from: number, runLength: number): numbe
     return -1;
 };
 
-const escapeRowPipes = (row: string, expectedCells: number): string => {
+const escapeRowPipes = (row: string, expectedCells: number, escaped: string): string => {
     let result = '';
     let index = 0;
 
@@ -139,11 +149,11 @@ const escapeRowPipes = (row: string, expectedCells: number): string => {
             continue;
         }
 
-        result += run + escapeUnescapedPipes(row.slice(runEnd, closerStart)) + run;
+        result += run + escapeUnescapedPipes(row.slice(runEnd, closerStart), escaped) + run;
         index = closerStart + run.length;
     }
 
-    result = result.replace(TEMPLATE_ACTION, (action) => escapeUnescapedPipes(action));
+    result = result.replace(TEMPLATE_ACTION, (action) => escapeUnescapedPipes(action, escaped));
 
     // A pipe inside a URL (bare or linked) is content, but a spaceless `|` between two cells is a separator —
     // the two are indistinguishable in isolation. Only escape scheme-run pipes when the row otherwise splits
@@ -153,10 +163,29 @@ const escapeRowPipes = (row: string, expectedCells: number): string => {
         return result;
     }
 
-    return result.replace(/\S+/g, (token) => (token.includes('://') ? escapeUnescapedPipes(token) : token));
+    return result.replace(/\S+/g, (token) => (token.includes('://') ? escapeUnescapedPipes(token, escaped) : token));
 };
 
-export const escapeTablePipes = (markdown: string): string => {
+// A line marked would take for a row and that is not one: the template's own line — it opens with a control
+// action, or holds nothing but actions — and a line with more cells than the header, whose extra cells marked
+// drops without a trace. The table ends above it and the line is the text it was written as.
+export const isNotARow = (line: string, columns: number): boolean => {
+    if (TEMPLATE_CONTROL_LINE.test(line)) {
+        return true;
+    }
+
+    const rest = line.replace(TEMPLATE_ACTION, '');
+
+    return (rest !== line && !rest.trim()) || countCells(escapeRowPipes(line, columns, TABLE_PIPE)) > columns;
+};
+
+export const countRowCells = (row: string): number => countCells(row);
+
+// Whether a row reads as its cells only because this scan protects a pipe in it before marked splits it.
+export const holdsProtectedPipe = (row: string, columns: number): boolean =>
+    escapeRowPipes(row, columns, TABLE_PIPE) !== row;
+
+export const escapeTablePipes = (markdown: string, escaped = '\\|'): string => {
     if (!markdown.includes('|')) {
         return markdown;
     }
@@ -170,10 +199,10 @@ export const escapeTablePipes = (markdown: string): string => {
     let isChanged = false;
 
     const escapeRow = (row: number, expectedCells: number): void => {
-        const escaped = escapeRowPipes(lines[row]!, expectedCells);
+        const protectedRow = escapeRowPipes(lines[row]!, expectedCells, escaped);
 
-        if (escaped !== lines[row]) {
-            lines[row] = escaped;
+        if (protectedRow !== lines[row]) {
+            lines[row] = protectedRow;
             isChanged = true;
         }
     };
@@ -210,10 +239,10 @@ export const escapeTablePipes = (markdown: string): string => {
 
             const prefixes = lines.slice(index, end).map((row) => BLOCKQUOTE_PREFIX.exec(row)![0]);
             const inner = lines.slice(index, end).map((row, offset) => row.slice(prefixes[offset]!.length));
-            const escaped = escapeTablePipes(inner.join('\n')).split('\n');
+            const inside = escapeTablePipes(inner.join('\n'), escaped).split('\n');
 
             for (let row = index; row < end; row++) {
-                const rebuilt = prefixes[row - index]! + escaped[row - index]!;
+                const rebuilt = prefixes[row - index]! + inside[row - index]!;
 
                 if (rebuilt !== lines[row]) {
                     lines[row] = rebuilt;
@@ -248,15 +277,23 @@ export const escapeTablePipes = (markdown: string): string => {
 
             const run = lines.slice(index, end);
 
-            if (end > index + 1 && run.some((row) => row.includes('|'))) {
-                const escaped = escapeTablePipes(run.map((row) => row.slice(contentColumn)).join('\n')).split('\n');
+            // The run is the item's, with or without a table in it: walked line by line here, a fence the
+            // item opens on its marker line would be closed by this scan where the item closes it, and
+            // every table below would go unprotected.
+            if (end > index + 1) {
+                if (run.some((row) => row.includes('|'))) {
+                    const inside = escapeTablePipes(
+                        run.map((row) => row.slice(contentColumn)).join('\n'),
+                        escaped,
+                    ).split('\n');
 
-                for (let row = index; row < end; row++) {
-                    const rebuilt = lines[row]!.slice(0, contentColumn) + escaped[row - index]!;
+                    for (let row = index; row < end; row++) {
+                        const rebuilt = lines[row]!.slice(0, contentColumn) + inside[row - index]!;
 
-                    if (rebuilt !== lines[row]) {
-                        lines[row] = rebuilt;
-                        isChanged = true;
+                        if (rebuilt !== lines[row]) {
+                            lines[row] = rebuilt;
+                            isChanged = true;
+                        }
                     }
                 }
 
@@ -266,10 +303,7 @@ export const escapeTablePipes = (markdown: string): string => {
             }
         }
 
-        if (!line.includes('|')) {
-            continue;
-        }
-
+        // A header may be written without a pipe; the delimiter row under it is what makes the table.
         const delimiter = lines[index + 1];
 
         if (delimiter === undefined || !TABLE_DELIMITER_LINE.test(delimiter) || !/[|:]/.test(delimiter)) {
@@ -286,7 +320,11 @@ export const escapeTablePipes = (markdown: string): string => {
         // content. escapeRowPipes leaves structural pipes alone, so escaping the header can't skew its cell count.
         escapeRow(index, expected);
 
-        for (let row = index + 2; row < lines.length && !isTableBodyEnd(lines[row]!); row++) {
+        for (let row = index + 2; row < lines.length; row++) {
+            if (isTableBodyEnd(lines[row]!) || isNotARow(lines[row]!, expected)) {
+                break;
+            }
+
             escapeRow(row, expected);
         }
     }

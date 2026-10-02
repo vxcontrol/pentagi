@@ -849,7 +849,7 @@ func TestKnowledge_DeleteUserDocument_DeletesOnlyTheUsersDocument(t *testing.T) 
 	}
 }
 
-func TestKnowledge_CreateDocument_StoresATrimmedManualDocumentAndAnnouncesIt(t *testing.T) {
+func TestKnowledge_CreateDocument_StoresAManualDocumentAsSentAndAnnouncesIt(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
 		maxBytes     int
@@ -861,17 +861,17 @@ func TestKnowledge_CreateDocument_StoresATrimmedManualDocumentAndAnnouncesIt(t *
 		{
 			name: "code with a description",
 			input: model.CreateKnowledgeDocumentInput{
-				DocType: model.KnowledgeDocTypeCode, Content: "  func main() {}  ", Question: "how to main?",
+				DocType: model.KnowledgeDocTypeCode, Content: "  func main() {}\n", Question: "how to main?",
 				Description: ptr("a Go main"), CodeLang: ptr("go"),
 			},
 			wantEmbedded: "func main() {}",
 			wantMeta: knowledgeMeta{
 				DocType: "code", UserID: 11, Question: "how to main?", Description: "a Go main", CodeLang: "go",
-				PartSize: 14, TotalSize: 14, Manual: true,
+				PartSize: 17, TotalSize: 17, Manual: true,
 			},
 			want: model.KnowledgeDocument{
-				DocType: model.KnowledgeDocTypeCode, Content: "func main() {}", Question: "how to main?",
-				Description: ptr("a Go main"), UserID: 11, CodeLang: ptr("go"), PartSize: 14, TotalSize: 14, Manual: true,
+				DocType: model.KnowledgeDocTypeCode, Content: "  func main() {}\n", Question: "how to main?",
+				Description: ptr("a Go main"), UserID: 11, CodeLang: ptr("go"), PartSize: 17, TotalSize: 17, Manual: true,
 			},
 		},
 		{
@@ -897,12 +897,12 @@ func TestKnowledge_CreateDocument_StoresATrimmedManualDocumentAndAnnouncesIt(t *
 		{
 			name:         "content past the embedding limit is embedded cut and stored whole",
 			maxBytes:     4,
-			input:        model.CreateKnowledgeDocumentInput{DocType: model.KnowledgeDocTypeAnswer, Content: "  trimmed  ", Question: "q", AnswerType: ptr(model.KnowledgeAnswerTypeTool)},
-			wantEmbedded: "trim",
-			wantMeta:     knowledgeMeta{DocType: "answer", UserID: 11, Question: "q", AnswerType: "tool", PartSize: 7, TotalSize: 7, Manual: true},
+			input:        model.CreateKnowledgeDocumentInput{DocType: model.KnowledgeDocTypeAnswer, Content: "  padded  ", Question: "q", AnswerType: ptr(model.KnowledgeAnswerTypeTool)},
+			wantEmbedded: "padd",
+			wantMeta:     knowledgeMeta{DocType: "answer", UserID: 11, Question: "q", AnswerType: "tool", PartSize: 10, TotalSize: 10, Manual: true},
 			want: model.KnowledgeDocument{
-				DocType: model.KnowledgeDocTypeAnswer, Content: "trimmed", Question: "q", UserID: 11,
-				AnswerType: ptr(model.KnowledgeAnswerTypeTool), PartSize: 7, TotalSize: 7, Manual: true,
+				DocType: model.KnowledgeDocTypeAnswer, Content: "  padded  ", Question: "q", UserID: 11,
+				AnswerType: ptr(model.KnowledgeAnswerTypeTool), PartSize: 10, TotalSize: 10, Manual: true,
 			},
 		},
 	} {
@@ -1030,6 +1030,22 @@ func TestKnowledge_DoUpdate_MergesTheInputIntoTheStoredDocument(t *testing.T) {
 				DocType: "guide", GuideType: "pentest", Question: "new q", Description: "new",
 				FlowID: ptr(int64(1)), TaskID: ptr(int64(2)), SubtaskID: ptr(int64(3)), PartSize: 11, TotalSize: 11,
 			},
+		},
+		{
+			name:         "the content is written as it was sent, the line break it ends with included",
+			content:      "old",
+			cmetadata:    `{"doc_type":"guide","guide_type":"pentest","question":"q"}`,
+			input:        model.UpdateKnowledgeDocumentInput{Content: "  # Title\n\ntext\n"},
+			wantEmbedded: "# Title\n\ntext",
+			wantMeta:     knowledgeMeta{DocType: "guide", GuideType: "pentest", Question: "q", PartSize: 16, TotalSize: 16},
+		},
+		{
+			name:         "the sizes of a stored part move by the bytes of the content as it was sent",
+			content:      "old",
+			cmetadata:    `{"doc_type":"guide","guide_type":"pentest","question":"q","part_size":3,"total_size":9}`,
+			input:        model.UpdateKnowledgeDocumentInput{Content: "  # Title\n\ntext\n"},
+			wantEmbedded: "# Title\n\ntext",
+			wantMeta:     knowledgeMeta{DocType: "guide", GuideType: "pentest", Question: "q", PartSize: 16, TotalSize: 22},
 		},
 		{
 			name:      "guide to answer drops the guide type and takes the answer type",

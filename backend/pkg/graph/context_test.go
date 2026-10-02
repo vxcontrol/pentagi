@@ -427,7 +427,7 @@ func TestContext_ValidateKnowledgeSearch_BoundsTheLimitAndValidatesTheQuery(t *t
 	}
 }
 
-func TestContext_ValidateFlowTemplateFields_TrimsAndBoundsTitleAndText(t *testing.T) {
+func TestContext_ValidateFlowTemplateFields_TrimsTheTitleAndKeepsTheTextAsSent(t *testing.T) {
 	t.Parallel()
 
 	longTitle, longText := strings.Repeat("я", 255), strings.Repeat("я", 65536)
@@ -440,13 +440,15 @@ func TestContext_ValidateFlowTemplateFields_TrimsAndBoundsTitleAndText(t *testin
 		wantText  string
 		wantErr   string
 	}{
-		{name: "padded values are stored trimmed", title: "  Padded  ", text: "  body  ", wantTitle: "Padded", wantText: "body"},
+		{name: "a padded title is trimmed and a padded text is not", title: "  Padded  ", text: "  body  ", wantTitle: "Padded", wantText: "  body  "},
+		{name: "the line break a text ends with is kept", title: "title", text: "# Plan\n\n- scan\n", wantTitle: "title", wantText: "# Plan\n\n- scan\n"},
 		{name: "whitespace-only title", title: "\t\n  ", text: "body", wantErr: "title is required"},
 		{name: "whitespace-only text", title: "title", text: " \t\n", wantErr: "text is required"},
 		{name: "multibyte title at the limit", title: longTitle, text: "body", wantTitle: longTitle, wantText: "body"},
 		{name: "title one over the limit", title: strings.Repeat("a", 256), text: "body", wantErr: "title must not exceed 255 characters"},
 		{name: "multibyte text at the limit", title: "title", text: longText, wantTitle: "title", wantText: longText},
 		{name: "text one over the limit", title: "title", text: strings.Repeat("a", 65537), wantErr: "text must not exceed 65536 characters"},
+		{name: "a final line break counts toward the limit", title: "title", text: longText + "\n", wantErr: "text must not exceed 65536 characters"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()

@@ -106,6 +106,7 @@ test.describe('template detail', { tag: '@coverage' }, () => {
 
         expect(variables.templateId).toBe(TEMPLATE_DETAIL.id);
         expect(variables.input.text).toContain('E2E-SAVE-MARK');
+        expect(variables.input.text, 'the line break the body ends with is sent').toMatch(/[^\n]\n$/);
 
         for (const atom of ['# Recon', '{{TARGET}}', 'nmap -sV']) {
             expect(variables.input.text, `"${atom}" survived the save`).toContain(atom);

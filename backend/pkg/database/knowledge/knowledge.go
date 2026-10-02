@@ -502,12 +502,13 @@ func (ks *knowledgeStore) CreateDocument(ctx context.Context, userID int64, inpu
 		return nil, err
 	}
 
-	content := strings.TrimSpace(input.Content)
+	content := input.Content
 	meta.PartSize = len(content)
 	meta.TotalSize = len(content)
 
-	// Truncate to embedding size limit for vector computation; full content goes to DB.
-	embeddingText := content
+	// The vector is computed from the text without the whitespace around it, cut to the embedding size
+	// limit; the document is stored whole, as it was sent.
+	embeddingText := strings.TrimSpace(content)
 	if len(embeddingText) > ks.maxEmbeddingBytes {
 		embeddingText = embeddingText[:ks.maxEmbeddingBytes]
 	}
@@ -645,7 +646,7 @@ func (ks *knowledgeStore) doUpdate(ctx context.Context, userID int64, id string,
 	meta := metaFromDoc(existing)
 
 	// Apply input fields.
-	content := strings.TrimSpace(input.Content)
+	content := input.Content
 	if input.Question != nil {
 		meta.Question = *input.Question
 	}
@@ -696,9 +697,9 @@ func (ks *knowledgeStore) doUpdate(ctx context.Context, userID int64, id string,
 		meta.TotalSize = existing.TotalSize + deltaContentLen
 	}
 
-	// Compute new embedding. Truncate to maxEmbeddingBytes to avoid token limit
-	// errors; the full content is stored in the document column.
-	embeddingText := content
+	// Compute new embedding from the text without the whitespace around it. Truncate to
+	// maxEmbeddingBytes to avoid token limit errors; the full content is stored in the document column.
+	embeddingText := strings.TrimSpace(content)
 	if len(embeddingText) > ks.maxEmbeddingBytes {
 		embeddingText = embeddingText[:ks.maxEmbeddingBytes]
 	}

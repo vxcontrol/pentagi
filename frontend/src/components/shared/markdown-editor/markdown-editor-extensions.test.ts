@@ -1,10 +1,15 @@
+import type { JSONContent } from '@tiptap/core';
+
 import { Editor } from '@tiptap/core';
 import { OrderedList, TaskList } from '@tiptap/extension-list';
+import { Table } from '@tiptap/extension-table';
 import { TextSelection } from '@tiptap/pm/state';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { GROWTH_IF_QUADRATIC, slowdownWhenInputQuadruples } from '@/test-utils/cost-growth';
+
 import { createMarkdownExtensions, isBlockApplied } from './markdown-editor-extensions';
-import { roundTrip, setupEditorJsdom, structuralCounts } from './markdown-editor-test-setup';
+import { markdownCodec, roundTrip, setupEditorJsdom, structuralCounts } from './markdown-editor-test-setup';
 import { findVariableOccurrences } from './markdown-editor-variable-highlight';
 
 beforeAll(setupEditorJsdom);
@@ -167,19 +172,95 @@ describe('Underline disabled — ++ never parses, C++/++flags prose survives', (
     );
 });
 
-describe('bare URLs / emails / <autolinks> become links and converge; explicit [links] still work', () => {
+describe('bare URLs / emails / <autolinks> are links and are saved as written; explicit [links] still work', () => {
     it.each([
-        ['see https://example.com/path now', 'see [https://example.com/path](https://example.com/path) now'],
-        ['contact me@example.com today', 'contact [me@example.com](mailto:me@example.com) today'],
-        ['a <https://example.com> ref', 'a [https://example.com](https://example.com) ref'],
-    ])('links %s then stays stable', (src, expected) => {
-        const out = roundTrip(src);
-        expect(out).toBe(expected);
-        expect(roundTrip(out)).toBe(out);
+        ['see https://example.com/path now', 'https://example.com/path'],
+        ['contact me@example.com today', 'mailto:me@example.com'],
+        ['a <https://example.com> ref', 'https://example.com'],
+    ])('%s holds a link and comes back as written', (src, href) => {
+        const editor = new Editor({ content: src, contentType: 'markdown', extensions: createMarkdownExtensions() });
+        const links = JSON.stringify(editor.getJSON()).match(/"href":"[^"]*"/g);
+
+        editor.destroy();
+
+        expect(links).toEqual([`"href":"${href}"`]);
+        expect(roundTrip(src)).toBe(src);
     });
 
     it('still round-trips an explicit [link](url)', () => {
         expect(roundTrip('[docs](https://example.com)')).toContain('[docs](https://example.com)');
+    });
+
+    it.each([
+        ['a bare URL in parentheses', '(see https://a.b/c).'],
+        ['a bold bare URL', '**https://a.b/e** is up'],
+        ['a URL that takes the backticks after it', 'at https://a.b/d`x` now'],
+        ['a link whose text is its target', '[https://a.b/c](https://a.b/c)'],
+        ['a relative link whose text is its target', '[docs/x.md](docs/x.md)'],
+        ['a www link written out', '[www.x.com](www.x.com)'],
+        ['bare URLs in a table', '| a | b |\n|---|---|\n| https://a.b/c | me@example.com |'],
+        ['a bare URL in a heading', '## See https://a.b/c'],
+    ])('%s comes back as written', (_name, md) => {
+        expect(roundTrip(md)).toBe(md);
+    });
+
+    it('writes out only the link whose text is no longer its target, not the others on its line', () => {
+        expect(roundTrip('see https://a.b/c?x=1&amp;y=2 and https://a.b/d')).toBe(
+            'see [https://a.b/c?x=1&y=2](https://a.b/c?x=1&amp;y=2) and https://a.b/d',
+        );
+    });
+
+    // CommonMark takes `<scheme:…>` for a link whatever the scheme; a Flask route is not one.
+    it.each(['route <int:order_id> here', 'pip install <git+https://github.com/x/y> now', '<sip:user@host.com>'])(
+        '%s is text, brackets included',
+        (md) => {
+            const editor = new Editor({ content: md, contentType: 'markdown', extensions: createMarkdownExtensions() });
+            const hasLink = JSON.stringify(editor.getJSON()).includes('"link"');
+
+            editor.destroy();
+
+            expect(hasLink).toBe(false);
+            expect(roundTrip(md)).toBe(md);
+        },
+    );
+
+    // Where a bare URL ends depends on what follows it, and whether the bold before it ends depends on the URL.
+    it.each([
+        [
+            'text is typed right against it',
+            'See https://a.b/c next',
+            { from: 18, to: 19 },
+            'See [https://a.b/c](https://a.b/c)next',
+        ],
+        [
+            'bold ends right against it',
+            '**Note:** https://a.b/c',
+            { from: 6, to: 7 },
+            '**Note:**[https://a.b/c](https://a.b/c)',
+        ],
+        [
+            'text is typed right after a bold one',
+            '**<https://a.b/c>** alpha',
+            { from: 14, to: 15 },
+            '[**https://a.b/c**](https://a.b/c)alpha',
+        ],
+        [
+            'text ends right before a bold one',
+            'see **<https://a.b/c>** now',
+            { from: 4, to: 5 },
+            'see[**https://a.b/c**](https://a.b/c) now',
+        ],
+    ])('writes a bare URL as an explicit link once %s', (_name, md, range, saved) => {
+        const editor = new Editor({ content: md, contentType: 'markdown', extensions: createMarkdownExtensions() });
+
+        editor.commands.deleteRange(range);
+
+        const out = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(out).toBe(saved);
+        expect(roundTrip(saved)).toBe(saved);
     });
 });
 
@@ -216,11 +297,30 @@ describe('TunedTable — cell pipes escaped + alignment preserved, idempotent', 
         expect(save2).toContain(marker);
     });
 
-    it('preserves per-column alignment (left :--- / center :---: / right ---:)', () => {
-        const save1 = roundTrip('| L | C | R |\n| :-- | :-: | --: |\n| a | b | c |');
+    it.each([
+        ['a hash column header', '| #   | Name |\n| --- | ---- |\n| 1   | a    |'],
+        ['a cell that opens with a quote marker', '| Threshold | Note |\n| --------- | ---- |\n| > 5 hosts | scan |'],
+        [
+            'cells that open with a backslash the author wrote',
+            '| Token | Meaning     |\n| ----- | ----------- |\n| \\>    | end of word |\n| \\# x  | literal     |',
+        ],
+        ['a row-like block with a short delimiter row', '| abc | def |\n| --- |\n| bar |'],
+    ])('comes back byte-identical: %s', (_name, md) => {
+        expect(roundTrip(md)).toBe(md);
+    });
 
-        expect(save1).toContain('| :--- | :---: | ---: |');
-        expect(roundTrip(save1)).toBe(save1);
+    it('preserves per-column alignment (left :--- / center :---: / right ---:)', () => {
+        const md = '| L   | C   | R   |\n| :-- | :-: | --: |\n| a   | b   | c   |';
+        const { destroy, parse, serialize } = markdownCodec();
+        const [table] = parse(md).content ?? [];
+        // Without the lines it was written as, which a table made in the editor does not have.
+        const made = serialize({ content: [{ ...table, attrs: {} }], type: 'doc' });
+
+        destroy();
+
+        expect(roundTrip(md)).toBe(md);
+        expect(made).toContain('| :--- | :---: | ---: |');
+        expect(roundTrip(made)).toBe(made);
     });
 
     // A doc-side cell text (typed/pasted in rich mode) can hold a backslash run right before a pipe — a
@@ -303,9 +403,77 @@ describe('ordered > bullet > code — indented nested code survives', () => {
     });
 });
 
+describe('an indented code block holds its lines and nothing under them', () => {
+    it.each([
+        ['a line of text right under it', '    id\nIt prints the uid.'],
+        ['a list right under it', '    id\n    whoami\n- next'],
+        ['a heading right under it', '    id\n# Next'],
+    ])('with %s', (_name, md) => {
+        const { destroy, parse } = markdownCodec();
+        const [block] = parse(md).content ?? [];
+
+        destroy();
+
+        expect(block?.type).toBe('codeBlock');
+        expect(block?.content?.[0]?.text).toBe(md.includes('whoami') ? 'id\nwhoami' : 'id');
+    });
+});
+
+describe('what a heading and an image carry beside their text', () => {
+    const saved = (block: JSONContent): string => {
+        const { destroy, serialize } = markdownCodec();
+        const written = serialize({ content: [block], type: 'doc' });
+
+        destroy();
+
+        return written;
+    };
+
+    it.each<[string, string, unknown, string]>([
+        ['the spaces after a heading', 'Run', '  ', '## Run  '],
+        ['nothing after a heading where what stood there is not spaces', 'Run', 'x', '## Run'],
+        ['nothing after a heading where what stood there holds a tab', 'Run', ' \t', '## Run'],
+        ['nothing more after a heading whose text ends with white space', 'Run ', ' ', '## Run '],
+    ])('writes %s', (_name, text, trail, written) => {
+        expect(saved({ attrs: { level: 2, trail }, content: [{ text, type: 'text' }], type: 'heading' })).toBe(written);
+    });
+
+    it('writes no link around what does not read as an image', () => {
+        const link = { href: 'https://h.test/', title: null };
+
+        expect(saved({ attrs: { alt: 'a', link, src: 's p.png' }, type: 'image' })).toBe('![a](s p.png)');
+    });
+
+    it.each<[string, unknown, string]>([
+        ['a link around an image', { href: 'https://h.test/', title: null }, '[![a](s.png)](https://h.test/)'],
+        [
+            'a link with a title around it',
+            { href: 'https://h.test/', title: 'open' },
+            '[![a](s.png)](https://h.test/ "open")',
+        ],
+        [
+            'a target with a space between angle brackets',
+            { href: 'https://h.test/a b', title: null },
+            '[![a](s.png)](<https://h.test/a b>)',
+        ],
+        ['no link whose target cannot be written', { href: 'https://h.test/a b<c', title: null }, '![a](s.png)'],
+        ['no link whose target reads back as another', { href: 'https://h.test/a\\(b', title: null }, '![a](s.png)'],
+        ['no link whose title reads back as another', { href: 'https://h.test/', title: 'wow\\!' }, '![a](s.png)'],
+        ['no link that has no target', { href: '', title: 'open' }, '![a](s.png)'],
+        ['no link that is not one', 'https://h.test/', '![a](s.png)'],
+    ])('writes %s', (_name, link, written) => {
+        expect(saved({ attrs: { alt: 'a', link, src: 's.png' }, type: 'image' })).toBe(written);
+        expect(roundTrip(written)).toBe(written);
+    });
+});
+
 describe('findVariableOccurrences — doc spans for the Available-variables cycle', () => {
-    const docOf = (md: string) => {
-        const editor = new Editor({ content: md, contentType: 'markdown', extensions: createMarkdownExtensions() });
+    const docOf = (content: JSONContent[] | string) => {
+        const editor = new Editor({
+            content: typeof content === 'string' ? content : { content: [{ content, type: 'paragraph' }], type: 'doc' },
+            contentType: typeof content === 'string' ? 'markdown' : 'json',
+            extensions: createMarkdownExtensions(),
+        });
         const { doc } = editor.state;
         editor.destroy();
 
@@ -336,10 +504,13 @@ describe('findVariableOccurrences — doc spans for the Available-variables cycl
     });
 
     it('finds a {{.Var}} split across text nodes by a mark (mark-boundary fix)', () => {
-        const doc = docOf('**{{**.Foo}} tail');
+        // What bolding one brace from the toolbar leaves in the document.
+        const doc = docOf([
+            { marks: [{ type: 'bold' }], text: '{{', type: 'text' },
+            { text: '.Foo}} tail', type: 'text' },
+        ]);
 
-        // sanity — the variable really is split: bolding a brace gives the textblock >1 inline child
-        expect(doc.firstChild?.childCount ?? 0).toBeGreaterThan(1);
+        expect(doc.firstChild?.childCount).toBe(2);
 
         const foo = findVariableOccurrences(doc, 'Foo');
 
@@ -351,27 +522,41 @@ describe('findVariableOccurrences — doc spans for the Available-variables cycl
     });
 
     it('spans the full token when a hard break sits inside it (non-text-node off-by-N)', () => {
-        const doc = docOf('{{.Foo\\\n}}');
+        const doc = docOf([{ text: '{{.Foo', type: 'text' }, { type: 'hardBreak' }, { text: '}}', type: 'text' }]);
 
-        // sanity — the hard break really is inside the token (text, hardBreak, text)
-        expect(doc.firstChild?.childCount ?? 0).toBeGreaterThan(1);
+        expect(doc.firstChild?.childCount).toBe(3);
 
         const foo = findVariableOccurrences(doc, 'Foo');
 
         expect(foo).toHaveLength(1);
 
         for (const hit of foo) {
-            expect(doc.textBetween(hit.from, hit.to)).toBe('{{.Foo}}');
+            expect(doc.textBetween(hit.from, hit.to)).toBe('{{.Foo\n}}');
         }
+    });
+
+    // The panel counts uses on the markdown, where a line break stands between two words.
+    it.each([
+        ['a line break after the name', 'x {{ .Name\nY }} z', 1],
+        ['a hard break after the name', 'x {{ .Name\\\nY }} z', 1],
+        ['a line break inside the name', 'a {{.Na\nme}} b', 0],
+    ])('reads %s as the markdown has it', (_name, md, uses) => {
+        expect(findVariableOccurrences(docOf(md), 'Name')).toHaveLength(uses);
     });
 });
 
-describe('typing matches load — underscore emphasis literal, bare URL autolinks like load', () => {
+describe('typing matches load — underscore emphasis literal, a bare URL is a link', () => {
     const typeString = (input: string): { html: string; md: string } => {
         const editor = new Editor({ content: '', contentType: 'markdown', extensions: createMarkdownExtensions() });
         const { view } = editor;
 
         for (const ch of input) {
+            // A newline in the input stands for Shift+Enter.
+            if (ch === '\n') {
+                editor.commands.setHardBreak();
+                continue;
+            }
+
             const { from } = view.state.selection;
             const handled = view.someProp('handleTextInput', (handler) =>
                 handler(view, from, from, ch, () => view.state.tr),
@@ -397,17 +582,84 @@ describe('typing matches load — underscore emphasis literal, bare URL autolink
         expect(md).toContain('_word_');
     });
 
-    it('typed bare URL autolinks — matches load', () => {
+    it('a typed bare URL is a link, saved with its target written out', () => {
         const { html, md } = typeString('see https://evil.example.com/x done');
 
         expect(html).toContain('<a ');
         expect(md).toContain('[https://evil.example.com/x](https://evil.example.com/x)');
     });
 
+    // Typed at the end of a loaded document, where an action is literal text and holds its own delimiters. A
+    // mark writes its delimiters back, so the bytes alone would not show one that took in half an action.
+    it.each([
+        ['a backtick after a raw string', 'x {{ printf `%s` .A }} y', ' `z`', 'x {{ printf `%s` .A }} y `z`', ['code']],
+        ['an asterisk after a comment', '{{/* a */}} b', ' c*', '{{/* a */}} b c*', []],
+        ['a tilde pair after one in a string', '{{ print " ~~" }} b', ' c~~', '{{ print " ~~" }} b c~~', []],
+        [
+            'a URL that runs into an action',
+            'see',
+            ' https://e.x/a?b={{.B}}&c=1 now',
+            'see https://e.x/a?b={{.B}}&c=1 now',
+            [],
+        ],
+        ['asterisks around a whole action', 'the', ' **{{ .Name }}** one', 'the **{{ .Name }}** one', ['bold']],
+    ])('%s pairs with nothing inside a Go action', (_name, md, typed, saved, marks) => {
+        const editor = new Editor({ content: md, contentType: 'markdown', extensions: createMarkdownExtensions() });
+        const { view } = editor;
+
+        editor.commands.focus('end');
+
+        for (const ch of typed) {
+            const { from } = view.state.selection;
+            const handled = view.someProp('handleTextInput', (handler) =>
+                handler(view, from, from, ch, () => view.state.tr),
+            );
+
+            if (!handled) {
+                view.dispatch(view.state.tr.insertText(ch));
+            }
+        }
+
+        const out = editor.getMarkdown();
+        const found = (editor.getJSON().content?.[0]?.content ?? []).flatMap((node: JSONContent) =>
+            (node.marks ?? []).map((mark) => mark.type),
+        );
+
+        editor.destroy();
+
+        expect(out).toBe(saved);
+        expect(found).toEqual(marks);
+    });
+
     it('typed *italic* / **bold** / ~~strike~~ still convert (star + double-tilde kept)', () => {
         expect(typeString('a **bold** b').html).toContain('<strong>');
         expect(typeString('a *ital* b').html).toContain('<em>');
         expect(typeString('a ~~del~~ b').html).toContain('<s>');
+    });
+
+    it.each([
+        ['bold first on the line', 'foo\n**bar** x', '<p>foo<br><strong>bar</strong> x</p>', 'foo  \n**bar** x'],
+        ['italic first on the line', 'foo\n*bar* x', '<p>foo<br><em>bar</em> x</p>', 'foo  \n*bar* x'],
+        ['strike first on the line', 'foo\n~~bar~~ x', '<p>foo<br><s>bar</s> x</p>', 'foo  \n~~bar~~ x'],
+        ['bold across the break', '**a\nb**', '<p><strong>a<br>b</strong></p>', '**a**  \n**b**'],
+        ['code across the break', '`a\nb`', '<p><code>a<br>b</code></p>', '`a`  \n`b`'],
+    ])('a mark typed around a hard break converts as it loads: %s', (_name, typed, html, md) => {
+        const result = typeString(typed);
+
+        expect(result.html).toBe(html);
+        expect(result.md).toBe(md);
+        expect(roundTrip(md)).toBe(md);
+    });
+
+    it('only the hard break reports text to the input-rule guard', () => {
+        const editor = new Editor({ extensions: createMarkdownExtensions() });
+        const withLeafText = Object.values(editor.schema.nodes)
+            .filter((type) => type.spec.leafText)
+            .map((type) => type.name);
+
+        editor.destroy();
+
+        expect(withLeafText).toEqual(['hardBreak']);
     });
 });
 
@@ -458,7 +710,7 @@ describe('line-leading # / > in a paragraph stay body text on round-trip (ENCODE
     });
 });
 
-describe('multi-paragraph table cell does not persist a raw control byte on save', () => {
+describe('a break inside a table cell is saved as a space', () => {
     const header = (text: string) => ({
         content: [{ content: [{ text, type: 'text' }], type: 'paragraph' }],
         type: 'tableHeader',
@@ -468,13 +720,26 @@ describe('multi-paragraph table cell does not persist a raw control byte on save
         type: 'tableCell',
     });
 
-    it('collapses two cell paragraphs to a space instead of joining with U+001F', () => {
+    const brokenCell = (first: string, second: string) => ({
+        content: [
+            {
+                content: [{ text: first, type: 'text' }, { type: 'hardBreak' }, { text: second, type: 'text' }],
+                type: 'paragraph',
+            },
+        ],
+        type: 'tableCell',
+    });
+
+    it.each([
+        ['two cell paragraphs', cell('one', 'two')],
+        ['a hard break in a cell', brokenCell('one', 'two')],
+    ])('collapses %s', (_name, broken) => {
         const doc = {
             content: [
                 {
                     content: [
                         { content: [header('h'), header('i')], type: 'tableRow' },
-                        { content: [cell('one', 'two'), cell('z')], type: 'tableRow' },
+                        { content: [broken, cell('z')], type: 'tableRow' },
                     ],
                     type: 'table',
                 },
@@ -486,9 +751,7 @@ describe('multi-paragraph table cell does not persist a raw control byte on save
 
         editor.destroy();
 
-        expect(md).not.toContain('\u001f');
-        expect(md).toContain('one two');
-        expect(md).toContain('z');
+        expect(md).toBe('| h       | i   |\n| ------- | --- |\n| one two | z   |');
     });
 });
 
@@ -497,9 +760,9 @@ type MarkdownTokenizerShape = {
     tokenize: (src: string, tokens: unknown[], lexer: unknown) => unknown;
 };
 
-describe('list tokenizers are guarded against the upstream per-block full-source split', () => {
+describe("list tokenizers — numbered lists are marked's own, the task tokenizer is guarded", () => {
     type Layer = {
-        config: { markdownTokenizer?: MarkdownTokenizerShape };
+        config: { markdownTokenizer?: MarkdownTokenizerShape | null };
         parent?: Layer;
     };
 
@@ -533,12 +796,9 @@ describe('list tokenizers are guarded against the upstream per-block full-source
         return extension ? rootOf(extension).config.markdownTokenizer : undefined;
     };
 
-    it.each([
-        ['orderedList', OrderedList],
-        ['taskList', TaskList],
-    ])('%s tokenize is wrapped, not the upstream function', (name, upstream) => {
-        const ours = tokenizerOf(name);
-        const theirs = (upstream.config as { markdownTokenizer?: { tokenize: unknown } }).markdownTokenizer;
+    it('taskList tokenize is wrapped, not the upstream function', () => {
+        const ours = tokenizerOf('taskList');
+        const theirs = (TaskList.config as { markdownTokenizer?: { tokenize: unknown } }).markdownTokenizer;
 
         expect(theirs?.tokenize).toBeTypeOf('function');
         expect(ours?.tokenize).toBeTypeOf('function');
@@ -546,59 +806,82 @@ describe('list tokenizers are guarded against the upstream per-block full-source
         expect(ours?.tokenize).not.toBe(theirs?.tokenize);
     });
 
-    // The guard must stay at least as wide as ORDERED_LIST_MARKER_PATTERN
-    // (`\d+|[ivxlcdmIVXLCDM]+|[a-zA-Z]{1,2}`); a marker form it rejects is silently demoted to a paragraph.
     it.each([
-        ['single digit', '1. alpha\n2. beta'],
-        ['multi digit', '10. alpha\n11. beta'],
-        ['lower roman', 'i. alpha\nii. beta'],
-        ['upper roman', 'IX. alpha\nX. beta'],
-        ['single alpha', 'a. alpha\nb. beta'],
-        ['two-letter alpha', 'aa. alpha\nab. beta'],
-        ['two-letter upper alpha', 'AB. alpha\nAC. beta'],
-    ])('ordered list with a %s marker survives the guard', (_name, md) => {
-        // Byte equality alone is blind here: a demoted paragraph holding the same two lines re-serialises
-        // to identical bytes, so the node type is the only assertion that can see the marker being rejected.
+        ['orderedList', OrderedList],
+        ['table', Table],
+    ])('%s ships a tokenizer upstream and the editor registers none', (name, upstream) => {
+        const theirs = (upstream.config as { markdownTokenizer?: { tokenize: unknown } }).markdownTokenizer;
+
+        expect(theirs?.tokenize).toBeTypeOf('function');
+        expect(tokenizerOf(name)).toBeNull();
+    });
+
+    it.each([
+        ['single digit', '1. alpha\n2. beta', '1. alpha\n2. beta'],
+        ['multi digit', '10. alpha\n11. beta', '10. alpha\n11. beta'],
+        ['paren delimiter', '1) alpha\n2) beta', '1) alpha\n2) beta'],
+        ['indented', '  1. alpha\n  2. beta', '  1. alpha\n  2. beta'],
+    ])('a numbered list with a %s marker is a list', (_name, md, saved) => {
         expect(structuralCounts(roundTrip(md)).orderedList).toBe(1);
+        expect(roundTrip(md)).toBe(saved);
+    });
+
+    // Byte equality alone passes for a list that re-serialises its own marker, hence the node count.
+    it.each([
+        ['lower roman', 'i. alpha\nii. beta', undefined],
+        ['upper roman', 'IX. alpha\nX. beta', undefined],
+        ['single alpha', 'a. alpha\nb. beta', undefined],
+        ['two-letter alpha', 'aa. alpha\nab. beta', undefined],
+        ['alpha paren', 'aa) alpha\nab) beta', undefined],
+        ['an honorific', 'Mr. Smith arrived at noon.', undefined],
+        ['an abbreviation before a number', 'No. 5 is alive.', undefined],
+        ['a figure reference', 'Fig. 3 shows the result.', undefined],
+        ['a question and its answer', 'Q. What is it?\nA. A scanner.', undefined],
+        ['letter sub-steps under a numbered step', '1. Step\n   a. sub one\n   b. sub two\n2. Next', 1],
+    ])('text that opens with %s stays as written', (_name, md, orderedLists) => {
+        expect(structuralCounts(roundTrip(md)).orderedList).toBe(orderedLists);
         expect(roundTrip(md)).toBe(md);
     });
 
-    // Upstream normalises `)` to `.` and drops a leading indent (verified identical without the guard), so
-    // these two assert only what the guard governs: the block is still a list, not demoted to a paragraph.
-    it.each([
-        ['paren delimiter', 'aa) alpha\nab) beta'],
-        ['indented', '  1. alpha\n  2. beta'],
-    ])('ordered list with a %s marker is not demoted to a paragraph', (_name, md) => {
-        expect(structuralCounts(roundTrip(md)).orderedList).toBe(1);
+    it('a lettered list pasted as HTML is the numbered list it is saved as', () => {
+        const editor = new Editor({
+            content: '<ol type="a"><li><p>alpha</p></li><li><p>beta</p></li></ol>',
+            extensions: createMarkdownExtensions(),
+        });
+        const list = editor.getJSON().content?.[0];
+        const md = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(list?.attrs).toMatchObject({ start: 1 });
+        expect(list?.attrs).not.toHaveProperty('type');
+        expect(md).toBe('1. alpha\n2. beta');
     });
 
     // Identity alone would also hold for a pass-through wrapper, which would silently restore the O(n^2)
     // load. This is the assertion that the short-circuit itself is wired.
-    it.each(['orderedList', 'taskList'])(
-        '%s never reaches upstream tokenize when the source does not open a list',
-        (name) => {
-            const upstream = upstreamTokenizerOf(name);
-            const wrapped = tokenizerOf(name);
+    it('taskList never reaches upstream tokenize when the source does not open a list', () => {
+        const upstream = upstreamTokenizerOf('taskList');
+        const wrapped = tokenizerOf('taskList');
 
-            expect(upstream?.tokenize).toBeTypeOf('function');
+        expect(upstream?.tokenize).toBeTypeOf('function');
 
-            const real = upstream!.tokenize;
-            let calls = 0;
+        const real = upstream!.tokenize;
+        let calls = 0;
 
-            upstream!.tokenize = (...args: Parameters<typeof real>) => {
-                calls += 1;
+        upstream!.tokenize = (...args: Parameters<typeof real>) => {
+            calls += 1;
 
-                return real(...args);
-            };
+            return real(...args);
+        };
 
-            try {
-                expect(wrapped?.tokenize('plain paragraph line\n'.repeat(500), [], undefined)).toBeUndefined();
-                expect(calls).toBe(0);
-            } finally {
-                upstream!.tokenize = real;
-            }
-        },
-    );
+        try {
+            expect(wrapped?.tokenize('plain paragraph line\n'.repeat(500), [], undefined)).toBeUndefined();
+            expect(calls).toBe(0);
+        } finally {
+            upstream!.tokenize = real;
+        }
+    });
 
     it.each([
         ['dash unchecked', '- [ ] open'],
@@ -608,6 +891,336 @@ describe('list tokenizers are guarded against the upstream per-block full-source
         ['upper X', '- [X] done'],
     ])('task list with a %s marker survives the guard', (_name, md) => {
         expect(structuralCounts(roundTrip(md)).taskList).toBe(1);
+    });
+});
+
+describe('what is written under a list item, and right after a list, comes back as written', () => {
+    it.each([
+        [
+            'code under a numbered step',
+            '1. Create the config:\n   ```yaml\n   steps:\n     - name: scan\n   ```\n2. Run it.',
+        ],
+        [
+            'code holding list-like lines under a step',
+            '1. Example:\n   ```text\n   1. not a list\n   - not a bullet\n   # not a heading\n   ```\n2. Done.',
+        ],
+        ['a fence opened on a numbered marker line', '1. ```bash\n   nmap -sV host\n   ```\n2. next'],
+        ['a fence opened on a bullet marker line', '- ```bash\n  nmap -sV host\n  ```\n- next'],
+        ['a child of a two-digit item', '9. nine\n10. ten\n    - child of ten\n11. eleven'],
+        ['a wrapped bullet with a hanging indent', '- first line of the item\n  second line of the item\n- next'],
+        ['a wrapped numbered item with a hanging indent', '1. first line\n   second line\n2. next'],
+        ['a closing tag right under a bullet list', '<rules>\n\n- one\n- two\n</rules>\n\nafter'],
+        ['a sentence right under a numbered list', '1. one\n2. two\nThen report back.'],
+        ['a line at the margin in a quoted list', '> - one\n> closing words'],
+        ['a second paragraph in a numbered item', '1. first\n\n   more about first\n2. second'],
+        ['a quote in a numbered item', '1. item\n   > quoted\n2. next'],
+        ['a plain bullet after a checkbox child', '- [ ] parent\n  - [x] child task\n  - plain child\n- [ ] next'],
+        ['a numbered checklist', '1. [ ] open the dashboard\n2. [X] export the report\n3. [ ]'],
+        ['a front-matter block', '---\n\ntitle: Nightly job runbook\ntags: [ops, cron]\n---\n\nBody'],
+        ['a two-line heading over a double rule', 'Totals for\nthe week\n===\n\ntext'],
+        ['an empty numbered item', '1. foo\n2.\n3. bar'],
+        ['an empty quote on a numbered marker line', '1. >'],
+        ['an empty quote on a bullet marker line', '- >\n- b'],
+        [
+            'text after code in a tight step',
+            '1. Run the scan:\n   ```bash\n   nmap -sV 10.0.0.5\n   ```\n   Then review **the** output.\n2. Next step',
+        ],
+        ['a heading and its text in one item', '- ### Title\n  body text\n- next'],
+        ['a rule inside an item', '- alpha\n\n  ---\n- beta'],
+        ['a dashed rule on a numbered marker line', '1. ---\n2. beta'],
+        ['a heading right after a numbered item', '1. step one\n## Next section\ntext'],
+        ['a rule right after a numbered list', '1. one\n2. two\n---\nafter'],
+        ['a fence right after a numbered item', '3. step\n```bash\necho hi\n```'],
+        ['a loose numbered checklist', '1. [ ] one\n\n2. [x] two'],
+        ['front matter written tight', '---\ntitle: Nightly job runbook\ntags: [ops, cron]\n---\nBody'],
+        [
+            'two tables in one item',
+            '- Results:\n  | a   | b   |\n  | --- | --- |\n  | 1   | 2   |\n\n  | c   | d   |\n  | --- | --- |\n  | 3   | 4   |',
+        ],
+        ['two quotes in one item', '- intro\n  > one\n\n  > two'],
+        ['tabs in code under a numbered step', '1. Build:\n   ```make\n   all:\n   \tgcc main.c\n   ```\n2. Run it.'],
+        [
+            'tabs in code under a bullet',
+            '- Build:\n  ```go\n  func main() {\n  \tfmt.Println("hi")\n  }\n  ```\n- Run it.',
+        ],
+    ])('%s', (_name, md) => {
+        const editor = new Editor({ content: md, contentType: 'markdown', extensions: createMarkdownExtensions() });
+        const saved = editor.getMarkdown();
+        const check = () => editor.state.doc.check();
+
+        // An item that opens with a fence has no paragraph of its own; the schema has to hold all the same.
+        expect(check).not.toThrow();
+        editor.destroy();
+        expect(saved).toBe(md);
+    });
+
+    it.each([
+        [
+            'a bullet holding a pipe in code right after a table',
+            '| a | b |\n| --- | --- |\n| 1 | 2 |\n- item `x | y` end',
+            '| a | b |\n| --- | --- |\n| 1 | 2 |\n\n- item `x | y` end',
+        ],
+        [
+            'code in a nested item indented with tabs',
+            '- parent\n\t- child\n\n\t  ```go\n\t  if x {\n\t  \treturn\n\t  }\n\t  ```\n- next',
+            '- parent\n    - child\n\n      ```go\n      if x {\n      \treturn\n      }\n      ```\n- next',
+        ],
+    ])('%s keeps its blocks apart and settles on the first save', (_name, md, saved) => {
+        expect(roundTrip(md)).toBe(saved);
+        expect(roundTrip(saved)).toBe(saved);
+    });
+
+    it('reads the markup of text that follows a code block in an item', () => {
+        const editor = new Editor({
+            content: '1. Run:\n   ```\n   x\n   ```\n   Then **bold** text.',
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+        const html = editor.getHTML();
+
+        editor.destroy();
+
+        expect(html).toContain('<p>Then <strong>bold</strong> text.</p>');
+    });
+
+    it('keeps code inside its item once the text written at the margin above it is deleted', () => {
+        const editor = new Editor({
+            content: '- intro\n</x>\n  ```sh\n  one\n  two\n  ```\n- next',
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+
+        editor.commands.deleteRange({ from: 3, to: 3 + 'intro\n</x>'.length });
+
+        const saved = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(saved).toBe('- ```sh\n  one\n  two\n  ```\n- next');
+    });
+});
+
+describe('a heading that holds a line break', () => {
+    const text = (value: string) => ({ text: value, type: 'text' });
+    const hard = (marker?: string) => ({ attrs: { marker }, type: 'hardBreak' });
+    const soft = hard('');
+
+    // Setext has two levels only; below them the ATX form is all there is, and it is one line. Setext cannot
+    // hold a break at either end of the heading, or one above a line that reads as a block of its own.
+    it.each([
+        ['between two lines at level 1', 1, [text('a'), hard(), text('b')], 'a  \nb\n==='],
+        ['between two lines at level 2', 2, [text('a'), hard(), text('b')], 'a  \nb\n---'],
+        ['between two lines and at the end', 1, [text('a'), hard(), text('b'), hard()], 'a  \nb\n==='],
+        ['between two lines at level 3', 3, [text('a'), hard(), text('b')], '### a b'],
+        ['written with a backslash at level 3', 3, [text('a'), hard('\\'), text('b')], '### a b'],
+        ['above an empty line', 3, [text('a'), hard(), hard(), text('b')], '### a b'],
+        ['at its end', 1, [text('Title'), hard()], '# Title'],
+        ['written with a backslash at its end', 2, [text('Title'), hard('\\')], '## Title'],
+        ['at its start', 1, [hard(), text('Title')], '# Title'],
+        ['written as nothing at its end', 1, [text('Totals for'), soft], '# Totals for'],
+        ['above a list item', 2, [text('Title'), hard(), text('- x')], '## Title - x'],
+        ['above an underline', 1, [text('Title'), soft, text('---')], '# Title ---'],
+        ['above a fence', 2, [text('Title'), soft, text('```sh')], '## Title ```sh'],
+    ])('%s', (_name, level, content, saved) => {
+        const editor = new Editor({
+            content: { content: [{ attrs: { level }, content, type: 'heading' }], type: 'doc' },
+            extensions: createMarkdownExtensions(),
+        });
+        const md = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(md).toBe(saved);
+        expect(structuralCounts(saved)).toEqual({ heading: 1 });
+    });
+
+    it.each([
+        ['a one-line heading keeps the underline it was written with', 1, '=====', [text('Title')], 'Title\n====='],
+        ['a heading of two lines keeps it too', 2, '-----', [text('a'), soft, text('b')], 'a\nb\n-----'],
+        ["an underline of another level is not the heading's", 2, '=====', [text('Title')], '## Title'],
+        ['nor is it for a heading of two lines', 2, '=====', [text('a'), soft, text('b')], 'a\nb\n---'],
+        ['an underline of anything else is not one', 1, '=-=', [text('Title')], '# Title'],
+        ['a level without an underline has none', 3, '---', [text('Title')], '### Title'],
+    ])('%s', (_name, level, underline, content, saved) => {
+        const editor = new Editor({
+            content: { content: [{ attrs: { level, underline }, content, type: 'heading' }], type: 'doc' },
+            extensions: createMarkdownExtensions(),
+        });
+        const md = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(md).toBe(saved);
+        expect(structuralCounts(saved)).toEqual({ heading: 1 });
+    });
+
+    it('is written in time that grows with a run of spaces, not with the square of it', () => {
+        const { destroy, parse, serialize } = markdownCodec();
+        const growth = slowdownWhenInputQuadruples(
+            (size: number) => parse(`### a${' '.repeat(size)}b`),
+            serialize,
+            64_000,
+        );
+
+        destroy();
+
+        expect(growth).toBeLessThan(GROWTH_IF_QUADRATIC / 2);
+    });
+
+    it('stays a heading once the text of its last line is deleted', () => {
+        const editor = new Editor({
+            content: 'Totals for\nthe week\n===\n\ntext',
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+
+        editor.commands.deleteRange({ from: 12, to: 20 });
+
+        const saved = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(saved).toBe('Totals for\n===\n\ntext');
+    });
+});
+
+describe('a rule on a marker line is not drawn with the marker', () => {
+    const ruleItem = (list: Record<string, unknown>, rule?: string): JSONContent => ({
+        content: [
+            {
+                attrs: list,
+                content: [
+                    {
+                        content: [{ type: 'paragraph' }, { attrs: { rule }, type: 'horizontalRule' }],
+                        type: 'listItem',
+                    },
+                ],
+                type: 'bulletList',
+            },
+        ],
+        type: 'doc',
+    });
+
+    it.each([
+        ['a dashed rule in a dashed item', {}, undefined, '- ***'],
+        ['a spaced dashed rule in a dashed item', {}, '- - -', '- ***'],
+        ['a starred rule in a starred item', { marker: '*' }, '***', '* ---'],
+        ['an underscored rule in a starred item', { marker: '*' }, '___', '* ___'],
+    ])('%s', (_name, list, rule, saved) => {
+        const editor = new Editor({ content: ruleItem(list, rule), extensions: createMarkdownExtensions() });
+        const md = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(md).toBe(saved);
+        expect(structuralCounts(saved)).toMatchObject({ bulletList: 1, horizontalRule: 1 });
+    });
+});
+
+describe('text typed after four columns of space is not code', () => {
+    const paragraph = (value: string) => ({ content: [{ text: value, type: 'text' }], type: 'paragraph' });
+
+    it.each([
+        ['four spaces', [paragraph('    nmap -sV host')], 'nmap -sV host'],
+        ['a tab', [paragraph('\tnmap -sV host')], 'nmap -sV host'],
+        ['three spaces, which marked drops itself', [paragraph('   nmap')], '   nmap'],
+        [
+            'four spaces in an item',
+            [{ content: [{ content: [paragraph('    nmap')], type: 'listItem' }], type: 'bulletList' }],
+            '- nmap',
+        ],
+        ['four spaces on a later line', [paragraph('scan\n    nmap')], 'scan\n    nmap'],
+    ])('%s', (_name, content, saved) => {
+        const editor = new Editor({ content: { content, type: 'doc' }, extensions: createMarkdownExtensions() });
+        const md = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(md).toBe(saved);
+        expect(structuralCounts(saved).codeBlock).toBeUndefined();
+    });
+});
+
+describe('the blocks of a quote are written the way they stand', () => {
+    it.each([
+        ['a list right under its lead-in', '> Checked:\n> - one\n> - two'],
+        ['text right under a heading', '> # Title\n> text'],
+        ['text right under a fence', '> ```sh\n> id\n> ```\n> It prints the uid.'],
+        ['a blank quoted line between two paragraphs', '> one\n>\n> two'],
+        ["a template's range around a list", '> {{ range .Notes }}\n> - {{ . }}\n> {{ end }}'],
+        ['a quote in a quote', '> outer\n> > inner\n> > more'],
+        ['a quote that holds nothing', '>'],
+    ])('%s', (_name, md) => {
+        expect(roundTrip(md)).toBe(md);
+        expect(structuralCounts(md).blockquote).toBeGreaterThan(0);
+    });
+
+    it('puts an empty quoted line between two blocks made in the editor', () => {
+        const paragraph = (value: string) => ({ content: [{ text: value, type: 'text' }], type: 'paragraph' });
+        const editor = new Editor({
+            content: { content: [{ content: [paragraph('one'), paragraph('two')], type: 'blockquote' }], type: 'doc' },
+            extensions: createMarkdownExtensions(),
+        });
+        const md = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(md).toBe('> one\n>\n> two');
+    });
+});
+
+describe('a hard break keeps the marker it was written with', () => {
+    it.each([
+        ['a backslash', 'Question:\\\nanswer'],
+        ['two spaces', 'one  \ntwo'],
+        ['three spaces', 'line   \nnext'],
+        ['spaces at the end of an item', '- one  \n- two \n- three'],
+    ])('%s', (_name, md) => {
+        expect(roundTrip(md)).toBe(md);
+    });
+
+    it.each([
+        ['a break written as nothing', 'one\ntwo'],
+        ['a backslash break', 'one\\\ntwo'],
+        ['a two-space break', 'one  \ntwo'],
+    ])('%s is the same break after its HTML is read back', (_name, md) => {
+        const editor = new Editor({ content: md, contentType: 'markdown', extensions: createMarkdownExtensions() });
+        const html = editor.getHTML();
+
+        editor.destroy();
+
+        const reread = new Editor({ content: html, extensions: createMarkdownExtensions() });
+        const saved = reread.getMarkdown();
+
+        reread.destroy();
+
+        expect(saved).toBe(md);
+    });
+});
+
+describe('a navigation key does not edit the document', () => {
+    it.each([
+        ['Tab on the block under a list', '- one\n\nafter', 'paragraph', 'Tab'],
+        ['ArrowUp at the top of a leading code block', '```\ncode\n```\n\nafter', 'codeBlock', 'ArrowUp'],
+    ])('%s', (_name, md, at, key) => {
+        const editor = new Editor({ content: md, contentType: 'markdown', extensions: createMarkdownExtensions() });
+        let caret = -1;
+
+        editor.state.doc.forEach((node, offset) => {
+            if (caret < 0 && node.type.name === at) {
+                caret = offset + 1;
+            }
+        });
+        editor.commands.setTextSelection(caret);
+
+        editor.commands.keyboardShortcut(key);
+
+        const after = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(caret).toBeGreaterThan(0);
+        expect(after).toBe(md);
     });
 });
 
@@ -705,14 +1318,14 @@ describe('block toggles are reversible under a whole-document selection', () => 
 });
 
 describe('a task checkbox is announced with its own text, not its subtree', () => {
-    const labelsFor = (markdown: string) => {
+    const labelsFor = (content: JSONContent | string) => {
         const element = document.createElement('div');
 
         document.body.appendChild(element);
 
         const editor = new Editor({
-            content: markdown,
-            contentType: 'markdown',
+            content,
+            contentType: typeof content === 'string' ? 'markdown' : 'json',
             element,
             extensions: createMarkdownExtensions(),
         });
@@ -737,6 +1350,21 @@ describe('a task checkbox is announced with its own text, not its subtree', () =
 
     it('an empty task still gets a name', () => {
         expect(labelsFor('- [ ] \n')).toEqual(['Task item checkbox for empty task item']);
+    });
+
+    it.each([
+        [
+            'text around a hard break',
+            [{ text: 'foo', type: 'text' }, { type: 'hardBreak' }, { text: 'bar', type: 'text' }],
+            'foo\nbar',
+        ],
+        ['nothing but a hard break', [{ type: 'hardBreak' }], 'empty task item'],
+    ])('a task holding %s is named by its text', (_name, inline, label) => {
+        const task = { attrs: { checked: false }, content: [{ content: inline, type: 'paragraph' }], type: 'taskItem' };
+
+        expect(labelsFor({ content: [{ content: [task], type: 'taskList' }], type: 'doc' })).toEqual([
+            `Task item checkbox for ${label}`,
+        ]);
     });
 });
 
@@ -845,7 +1473,7 @@ describe('whole-document block toggles across document shapes', () => {
                 return;
             }
 
-            expect(out.trimEnd()).toBe(original.trimEnd());
+            expect(out).toBe(original);
         },
     );
 
@@ -874,7 +1502,7 @@ describe('whole-document block toggles across document shapes', () => {
 
         editor.destroy();
 
-        expect(out.trimEnd()).toBe('one\n\ntwo');
+        expect(out).toBe('one\n\ntwo');
     });
 
     it.each(TOGGLES)('%s reports the same state to the toolbar as its own click performs', (node, command) => {
@@ -1084,7 +1712,7 @@ describe('a setext underline after a hard break does not turn the paragraph into
         const result = hardBreakParagraph('foo', underline);
 
         expect(result.counts).toEqual({});
-        expect(result.text).toBe(`foo${underline}`);
+        expect(result.text).toBe(`foo\n${underline}`);
     });
 
     it('leaves a real setext heading in stored markdown alone', () => {
@@ -1157,6 +1785,15 @@ describe('brackets in a link label or an image alt do not break the node on relo
     });
 
     // An unbalanced bracket in alt broke `![alt](src)` outright: the reload parsed ZERO image nodes.
+    it('leaves the brackets of a Go action in an image alt to the template', () => {
+        const md = '![{{ index .M "[k]" }} of [x]](http://x.test/i.png)';
+        const saved = roundTrip(md);
+
+        expect(saved).toBe('![{{ index .M "[k]" }} of \\[x\\]](http://x.test/i.png)');
+        expect(roundTrip(saved)).toBe(saved);
+        expect(structuralCounts(saved).image).toBe(1);
+    });
+
     it.each(['a]b', 'a[b'])('an image alt of %s keeps the image node', (alt) => {
         const saved = saveOf(imageDoc(alt));
 
@@ -1200,8 +1837,7 @@ describe('a heading applied over the whole document', () => {
         editor.commands.selectAll();
         editor.commands.toggleHeading({ level: level as 1 | 2 | 3 | 4 | 5 | 6 });
 
-        // selectAll materialises TrailingNode's empty paragraph, which serialises as a trailing blank line.
-        const out = editor.getMarkdown().trimEnd();
+        const out = editor.getMarkdown();
 
         editor.destroy();
 

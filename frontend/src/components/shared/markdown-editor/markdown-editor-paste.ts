@@ -1,6 +1,8 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 
+import { lineBreaksAtEnd } from './markdown-editor-layout';
+
 // @tiptap/markdown parses markdown for load/insertContent but never for the clipboard, so a paste of block
 // markdown (# ## - 1. | >) would land as literal text (only StarterKit's inline mark paste-rules fire).
 // Route markdown-looking plain-text pastes through the same markdown layer as load; defer to ProseMirror's
@@ -64,7 +66,12 @@ export const MarkdownPaste = Extension.create({
                             return false;
                         }
 
-                        return editor.commands.insertContent(text, { contentType: 'markdown' });
+                        // Without the line breaks it ends with: read as a document's, they would be written
+                        // at the end of this one.
+                        return editor.commands.insertContent(
+                            text.slice(0, text.length - lineBreaksAtEnd(text).length),
+                            { contentType: 'markdown' },
+                        );
                     },
                 },
             }),

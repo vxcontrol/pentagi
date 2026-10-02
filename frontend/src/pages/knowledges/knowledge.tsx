@@ -63,7 +63,7 @@ function Knowledge() {
     );
 
     const handleSubmit = useCallback(
-        // `values` are the zod-parsed form output (trimmed, length-validated).
+        // `values` are the zod-parsed form output (single-line fields trimmed, lengths validated).
         // CREATE sends a full payload; UPDATE sends only fields the user
         // actually changed (`dirtyFields`) so untouched optional fields stay
         // untouched on the backend and explicit clears (e.g. wiping an existing

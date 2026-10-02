@@ -10,9 +10,10 @@ export interface InlineMatch {
 // scan, this reunites a token split across text nodes by a mark (e.g. a user styles one brace of `{{.Var}}`,
 // so ProseMirror splits it) — the brace and the rest sit in one block string again. ProseMirror positions are
 // one per UTF-16 unit and mark-independent; `from`/`to` are read from the per-character position map (NOT
-// `from + length`) so a token that also contains a non-text inline node — a hard break from Shift+Enter —
-// still spans the right range. `regex` MUST be global (`/g`). Scanning per textblock — NOT over
-// `doc.textContent` — keeps positions aligned across blocks.
+// `from + length`) so a token that also contains a non-text inline node still spans the right range. A line
+// break is one such node and one character of the scanned text, the newline it is written as: `{{ if\n.X }}`
+// reads here the way it reads in the markdown. `regex` MUST be global (`/g`). Scanning per textblock — NOT
+// over `doc.textContent` — keeps positions aligned across blocks.
 export const collectInlineMatches = (doc: PMNode, regex: RegExp): InlineMatch[] => {
     const matches: InlineMatch[] = [];
 
@@ -31,6 +32,9 @@ export const collectInlineMatches = (doc: PMNode, regex: RegExp): InlineMatch[] 
                     text += child.text[i];
                     positions.push(inlinePos + i);
                 }
+            } else if (child.type.name === 'hardBreak') {
+                text += '\n';
+                positions.push(inlinePos);
             }
 
             inlinePos += child.nodeSize;

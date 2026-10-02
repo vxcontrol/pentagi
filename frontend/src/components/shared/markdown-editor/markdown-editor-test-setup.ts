@@ -1,3 +1,5 @@
+import type { JSONContent } from '@tiptap/core';
+
 import { Editor } from '@tiptap/core';
 
 import { createMarkdownExtensions } from './markdown-editor-extensions';
@@ -53,4 +55,19 @@ export const structuralCounts = (markdown: string): Record<string, number> => {
     editor.destroy();
 
     return counts;
+};
+
+// The two halves of a round trip, apart, for a test that measures how the cost of one grows.
+export const markdownCodec = (): {
+    destroy: () => void;
+    parse: (markdown: string) => JSONContent;
+    serialize: (doc: JSONContent) => string;
+} => {
+    const editor = new Editor({ extensions: createMarkdownExtensions() });
+
+    return {
+        destroy: () => editor.destroy(),
+        parse: (markdown) => editor.markdown!.parse(markdown),
+        serialize: (doc) => editor.markdown!.serialize(doc),
+    };
 };

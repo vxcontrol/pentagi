@@ -1,8 +1,10 @@
 import { Editor } from '@tiptap/core';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { GROWTH_IF_QUADRATIC, slowdownWhenInputQuadruples } from '@/test-utils/cost-growth';
+
 import { createMarkdownExtensions } from './markdown-editor-extensions';
-import { roundTrip, setupEditorJsdom } from './markdown-editor-test-setup';
+import { markdownCodec, roundTrip, setupEditorJsdom } from './markdown-editor-test-setup';
 
 beforeAll(setupEditorJsdom);
 
@@ -24,6 +26,19 @@ describe('code-block fence lengthening — a block documenting a ``` fence stays
         expect(out).toContain('nested fence');
     });
 
+    it('sizes the fence in time that grows with a line of backticks, not with the square of it', () => {
+        const { destroy, parse, serialize } = markdownCodec();
+        const growth = slowdownWhenInputQuadruples(
+            (size: number) => parse(`\`\`\`\nstart\n${'`'.repeat(size)}x\nend\n\`\`\``),
+            serialize,
+            16_000,
+        );
+
+        destroy();
+
+        expect(growth).toBeLessThan(GROWTH_IF_QUADRATIC / 2);
+    });
+
     it('leaves an ordinary code block on a 3-backtick fence', () => {
         expect(roundTrip('```js\nconst x = 1;\n```')).toBe('```js\nconst x = 1;\n```');
     });
@@ -32,6 +47,13 @@ describe('code-block fence lengthening — a block documenting a ``` fence stays
 // A tilde fence's info string may hold a backtick; a backtick fence's may not — re-emitting such a block on a
 // backtick fence produces an opening line that is no longer a fence at all, and the code block is destroyed.
 describe('code-block fence character — a language containing a backtick keeps its tilde fence', () => {
+    it('keeps a language that opens with a tilde apart from the fence', () => {
+        const src = '~~~ ~x\ncode\n~~~';
+
+        expect(roundTrip(src)).toBe(src);
+        expect(nodeCount(src, 'codeBlock')).toBe(1);
+    });
+
     it('re-emits a tilde fence so the block survives reload', () => {
         const src = '~~~`js`\nconst x = 1;\n~~~';
         const out = roundTrip(src);
@@ -110,6 +132,116 @@ describe('inline code containing a backtick round-trips exactly', () => {
 
         expect(out).toContain('``a `b` c``');
         expect(roundTrip(out)).toBe(out);
+    });
+
+    it.each([
+        ['one backtick around a doubled one', 'where `name = ``admin`` and 1` holds'],
+        ['more backticks than the code needs', 'x ```` a`b ```` y'],
+        ['one backtick, over two lines', 'chars: `< > + \\``\nAllowed: `img`, `svg`'],
+        ['five backticks', 'x `````ab````` y'],
+        ['the fence the writer would choose', 'x ``a `b` c`` y'],
+    ])('keeps the fence a span was written with: %s', (_name, md) => {
+        expect(roundTrip(md)).toBe(md);
+    });
+
+    it.each<[string, { fence?: number; text: string }[], string]>([
+        [
+            'code without a fence of its own inside it',
+            [{ fence: 3, text: 'nmap' }, { text: 'X' }, { fence: 3, text: ' -sV' }],
+            '`nmapX -sV`',
+        ],
+        [
+            'code with another fence beside it',
+            [
+                { fence: 3, text: 'nmap' },
+                { fence: 2, text: 'id' },
+            ],
+            '`nmapid`',
+        ],
+        [
+            'every piece of it with the same fence',
+            [
+                { fence: 3, text: 'nmap' },
+                { fence: 3, text: ' -sV' },
+            ],
+            '```nmap -sV```',
+        ],
+    ])('fences a span once: %s', (_name, pieces, saved) => {
+        const editor = new Editor({
+            content: {
+                content: [
+                    {
+                        content: [
+                            { text: 'Run ', type: 'text' },
+                            ...pieces.map(({ fence, text }) => ({
+                                marks: [{ attrs: { fence: fence ?? null }, type: 'code' }],
+                                text,
+                                type: 'text',
+                            })),
+                            { text: ' first', type: 'text' },
+                        ],
+                        type: 'paragraph',
+                    },
+                ],
+                type: 'doc',
+            },
+            extensions: createMarkdownExtensions(),
+        });
+        const written = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(written).toBe(`Run ${saved} first`);
+        expect(roundTrip(written)).toBe(written);
+    });
+
+    it('writes a span over two lines with a fence that holds its lines where the one it had does not', () => {
+        const written = roundTrip('x ```a\nb``` y');
+
+        expect(written).toBe('x `a\nb` y');
+        expect(roundTrip(written)).toBe(written);
+    });
+
+    it.each([
+        ['a run as long as the fence is typed into the span', 'x ```` a`b ```` y', '````', 'x `````  a`b ```` ````` y'],
+        ['the same with a fence of one', 'where `a``b` holds', '`', 'where ``` a``b` ``` holds'],
+    ])('writes the fence the code needs once %s', (_name, md, typed, saved) => {
+        const editor = new Editor({ content: md, contentType: 'markdown', extensions: createMarkdownExtensions() });
+        let end = 0;
+
+        editor.state.doc.descendants((node, at) => {
+            if (node.marks.some((mark) => mark.type.name === 'code')) {
+                end = at + node.nodeSize;
+            }
+        });
+        editor.chain().setTextSelection(end).insertContent(typed).run();
+
+        const written = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(written).toBe(saved);
+        expect(roundTrip(written)).toBe(written);
+    });
+
+    it.each([0, -1, 1.5, 65, '1'])('writes the fence the code needs where the one it carries is %j', (fence) => {
+        const editor = new Editor({
+            content: {
+                content: [
+                    {
+                        content: [{ marks: [{ attrs: { fence }, type: 'code' }], text: 'a``b', type: 'text' }],
+                        type: 'paragraph',
+                    },
+                ],
+                type: 'doc',
+            },
+            extensions: createMarkdownExtensions(),
+        });
+        const written = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(written).toBe('```a``b```');
     });
 
     it.each([

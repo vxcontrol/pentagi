@@ -14,6 +14,7 @@ const para = (...content: JSONContent[]): JSONContent => ({ content, type: 'para
 const t = (text: string, marks?: JSONContent['marks']): JSONContent =>
     marks ? { marks, text, type: 'text' } : { text, type: 'text' };
 const hb: JSONContent = { type: 'hardBreak' };
+const lineBreak: JSONContent = { attrs: { marker: '' }, type: 'hardBreak' };
 
 const newEditor = (content: JSONContent | string) =>
     new Editor({ content: content as string, extensions: createMarkdownExtensions() });
@@ -192,8 +193,11 @@ describe('multi-line blocks (hardBreak / Shift+Enter) stay body text', () => {
         expect(roundTrip(md)).toBe(md);
     });
 
-    it('a multi-line block "# a"⏎"body" stays a paragraph and round-trips', () => {
-        const { heading, md, reloadHeading } = promote(doc(para(t('z# A'), hb, t('body'))), 'z# A');
+    it.each([
+        ['a hard break', hb],
+        ['a line break written as nothing', lineBreak],
+    ])('a multi-line block "# a"⏎"body" over %s stays a paragraph and round-trips', (_name, br) => {
+        const { heading, md, reloadHeading } = promote(doc(para(t('z# A'), br, t('body'))), 'z# A');
 
         expect(heading).toBe(0);
         expect(reloadHeading).toBe(0);

@@ -95,7 +95,7 @@ describe('KnowledgeForm — Save and leave (data router)', () => {
 
         render(<RouterProvider router={router} />);
 
-        await user.type(screen.getByLabelText('content'), 'hello world');
+        await user.type(screen.getByLabelText('content'), 'hello world{Enter}');
         await user.type(screen.getByLabelText('question'), 'why');
 
         await user.click(screen.getByRole('link', { name: 'go elsewhere' }));
@@ -106,5 +106,6 @@ describe('KnowledgeForm — Save and leave (data router)', () => {
         await waitFor(() => expect(screen.getByText('elsewhere page')).toBeInTheDocument());
         expect(screen.queryByText('new doc page')).not.toBeInTheDocument();
         expect(onSubmit).toHaveBeenCalledOnce();
+        expect(onSubmit.mock.lastCall![0].content).toBe('hello world\n');
     });
 });

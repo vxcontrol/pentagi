@@ -67,3 +67,71 @@ func knowledgeAnswerToAnUnstorableDocument(t *testing.T, handler func(*Knowledge
 	assert.Equal(t, http.StatusBadRequest, w.Code, "the caller sent a document the door refuses, not a server fault")
 	assert.Equal(t, "Knowledge.InvalidRequest", resp.Code)
 }
+
+// recordingKnowledgeStore keeps what the door handed it, and hands nothing back once its context is done.
+type recordingKnowledgeStore struct {
+	knowledgepkg.KnowledgeStore
+	contents []string
+}
+
+func (s *recordingKnowledgeStore) record(ctx context.Context, content string) (*gqlmodel.KnowledgeDocument, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s.contents = append(s.contents, content)
+	return &gqlmodel.KnowledgeDocument{ID: "doc", DocType: gqlmodel.KnowledgeDocTypeAnswer, Content: content}, nil
+}
+
+func (s *recordingKnowledgeStore) CreateDocument(
+	ctx context.Context, _ int64, input gqlmodel.CreateKnowledgeDocumentInput,
+) (*gqlmodel.KnowledgeDocument, error) {
+	return s.record(ctx, input.Content)
+}
+
+func (s *recordingKnowledgeStore) UpdateUserDocument(
+	ctx context.Context, _ int64, _ string, input gqlmodel.UpdateKnowledgeDocumentInput,
+) (*gqlmodel.KnowledgeDocument, error) {
+	return s.record(ctx, input.Content)
+}
+
+func TestKnowledge_CreateDocument_RefusesABlankContentAndStoresTheRestAsSent(t *testing.T) {
+	knowledgeContentAtTheDoor(t, (*KnowledgeService).CreateDocument, http.StatusCreated,
+		`{"doc_type":"answer","answer_type":"other","question":"q","content":%s}`)
+}
+
+func TestKnowledge_UpdateDocument_RefusesABlankContentAndStoresTheRestAsSent(t *testing.T) {
+	knowledgeContentAtTheDoor(t, (*KnowledgeService).UpdateDocument, http.StatusOK, `{"content":%s}`)
+}
+
+func knowledgeContentAtTheDoor(t *testing.T, handler func(*KnowledgeService, *gin.Context), stored int, body string) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+
+	for _, tc := range []struct {
+		name       string
+		content    string
+		wantStatus int
+		wantStored []string
+	}{
+		{name: "a content of whitespace is refused before the store", content: " \n\t", wantStatus: http.StatusBadRequest},
+		{name: "a padded content reaches the store as it was sent", content: "  22\n443\n", wantStatus: stored, wantStored: []string{"  22\n443\n"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &recordingKnowledgeStore{}
+			content, err := json.Marshal(tc.content)
+			require.NoError(t, err)
+
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Set("uid", uint64(7))
+			c.Params = gin.Params{{Key: "id", Value: "doc"}}
+			c.Request = httptest.NewRequest(http.MethodPost, "/knowledge/", strings.NewReader(fmt.Sprintf(body, content)))
+			c.Request.Header.Set("Content-Type", "application/json")
+
+			handler(NewKnowledgeService(nil, store), c)
+
+			assert.Equal(t, tc.wantStatus, w.Code, w.Body.String())
+			assert.Equal(t, tc.wantStored, store.contents)
+		})
+	}
+}

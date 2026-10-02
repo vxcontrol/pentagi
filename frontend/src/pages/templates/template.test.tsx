@@ -30,6 +30,26 @@ describe('the flow template form schema', () => {
         expect(parse({ text: 'a'.repeat(TEXT_LIMIT + 1) }).success).toBe(false);
     });
 
+    it.each([
+        ['spaces', '   '],
+        ['line breaks and tabs', '\n\t \n'],
+    ])('refuses a text of nothing but %s', (_name, text) => {
+        expect(parse({ text }).error?.issues.find((issue) => issue.path[0] === 'text')?.message).toBe(
+            'Text is required',
+        );
+    });
+
+    it('hands the text on as it was written and trims the title', () => {
+        expect(parse({ text: '  # Plan\n\n- scan\n', title: '  Recon  ' }).data).toEqual({
+            text: '  # Plan\n\n- scan\n',
+            title: 'Recon',
+        });
+    });
+
+    it('counts the line break a text ends with toward its limit', () => {
+        expect(parse({ text: `${'a'.repeat(TEXT_LIMIT)}\n` }).success).toBe(false);
+    });
+
     it('counts an astral text character once, the way the mutation does', () => {
         expect(parse({ text: '\u{1f512}'.repeat(TEXT_LIMIT) }).success).toBe(true);
         expect(parse({ text: '\u{1f512}'.repeat(TEXT_LIMIT + 1) }).success).toBe(false);

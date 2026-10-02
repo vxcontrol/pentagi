@@ -5,7 +5,7 @@ import { GROWTH_IF_QUADRATIC, slowdownWhenInputQuadruples } from '@/test-utils/c
 
 import { createMarkdownExtensions } from './markdown-editor-extensions';
 import { escapeTablePipes } from './markdown-editor-table-pipes';
-import { roundTrip, setupEditorJsdom } from './markdown-editor-test-setup';
+import { roundTrip, setupEditorJsdom, structuralCounts } from './markdown-editor-test-setup';
 
 setupEditorJsdom();
 
@@ -71,11 +71,9 @@ describe('escapeTablePipes — pure pre-lex pipe protection', () => {
 
 describe('table cell with a piped code span — content survives load and converges (H1)', () => {
     it('keeps the trailing cell and preserves the code content', () => {
-        const out = roundTrip('| Op | Meaning |\n| --- | --- |\n| `x | y` | z |');
+        const src = '| Op | Meaning |\n| --- | --- |\n| `x | y` | z |';
 
-        expect(out).toContain('z');
-        expect(out).toContain('`x \\| y`');
-        expect(roundTrip(out)).toBe(out);
+        expect(roundTrip(src)).toBe(src);
     });
 
     // This used to pin `{{.X \| upper}}` — the escaped form, which Go text/template rejects outright
@@ -94,7 +92,7 @@ describe('table cell with a piped code span — content survives load and conver
         const out = roundTrip('| Op | Meaning |\n| --- | --- |\n| `` `x` | y `` | kept |');
 
         expect(out).toContain('kept');
-        expect(out).toContain('`` `x` \\| y ``');
+        expect(out).toContain('`` `x` | y ``');
         expect(roundTrip(out)).toBe(out);
     });
 });
@@ -110,7 +108,7 @@ describe('pipe-less GFM tables (no outer pipe) — cells survive too', () => {
         const out = roundTrip('A | B | C\n--- | --- | ---\n`git log | head` | notes | done');
 
         expect(out).toContain('done');
-        expect(out).toContain('`git log \\| head`');
+        expect(out).toContain('`git log | head`');
         expect(roundTrip(out)).toBe(out);
     });
 
@@ -176,12 +174,11 @@ describe('table cell with a pipe inside a URL — content survives load and conv
         );
     });
 
-    it('keeps the URL and the trailing cell on round-trip, and converges', () => {
-        const out = roundTrip('| A | B |\n| --- | --- |\n| [go](https://h/?x=1|2) | TRAILING |');
+    it('keeps the URL and the trailing cell on round-trip', () => {
+        const md = '| A | B |\n| --- | --- |\n| [go](https://h/?x=1|2) | TRAILING |';
 
-        expect(out).toContain('TRAILING');
-        expect(out).toContain('x=1\\|2');
-        expect(roundTrip(out)).toBe(out);
+        expect(structuralCounts(md)).toMatchObject({ tableCell: 2 });
+        expect(roundTrip(md)).toBe(md);
     });
 });
 
@@ -199,10 +196,9 @@ describe('tables inside a blockquote — prefix-stripped and protected', () => {
     });
 
     it('keeps the trailing cell of a blockquoted table on round-trip', () => {
-        const out = roundTrip('> | a | b |\n> | --- | --- |\n> | `x | y` | z |');
+        const src = '> | a | b |\n> | --- | --- |\n> | `x | y` | z |';
 
-        expect(out).toContain('z');
-        expect(out).toContain('`x \\| y`');
+        expect(roundTrip(src)).toBe(src);
     });
 
     it('leaves blockquote prose (no table) untouched', () => {
@@ -226,10 +222,9 @@ describe('fence length tracking — a longer fence is not closed by a shorter in
     });
 
     it('round-trips a table after a fence-demonstrating code block without losing the cell', () => {
-        const out = roundTrip('````\n```\ninner\n````\n\n| a | b |\n| --- | --- |\n| `x | y` | z |');
+        const src = '````\n```\ninner\n````\n\n| a | b |\n| --- | --- |\n| `x | y` | z |';
 
-        expect(out).toContain('z');
-        expect(out).toContain('`x \\| y`');
+        expect(roundTrip(src)).toBe(src);
     });
 });
 
@@ -243,8 +238,7 @@ describe('CRLF line endings — tables still protected', () => {
     it('keeps the trailing cell of a CRLF table on round-trip', () => {
         const out = roundTrip('| a | b |\r\n| --- | --- |\r\n| `x | y` | z |\r\n');
 
-        expect(out).toContain('z');
-        expect(out).toContain('`x \\| y`');
+        expect(out).toBe('| a | b |\n| --- | --- |\n| `x | y` | z |\n');
     });
 
     it('leaves CRLF bytes untouched when there is no table to escape', () => {
@@ -450,10 +444,100 @@ describe('a Go template pipeline in a table cell keeps its own pipe', () => {
 
         expect(roundTrip(once)).toBe(once);
     });
+});
+describe('the scan takes for a row only what marked takes for one', () => {
+    it.each([
+        ['a standard HTML block tag under the table', '| a |\n|---|\n<p>`x | y`</p>'],
+        ['a closing block tag under the table', '| a |\n|---|\n| 1 |\n</details>\n`x | y`'],
+        [
+            'a template control line under the table',
+            '| a | b |\n|---|---|\n{{ range .Rows }}| `x | y` | z |\n{{ end }}',
+        ],
+    ])('leaves the pipes of %s alone', (_name, md) => {
+        expect(escapeTablePipes(md)).toBe(md);
+    });
 
-    // A structural pipe still has to be escaped when it is real content, not a template operator.
-    it('still escapes a pipe inside a code span', () => {
-        expect(roundTrip('| a | b |\n| --- | --- |\n| `x | y` | z |')).toContain('\\|');
+    it.each([
+        ['a tag that is no HTML block', '| a |\n|---|\n<tool>`x | y`</tool>', '| a |\n|---|\n<tool>`x \\| y`</tool>'],
+        ['an action that is no control line', '| a |\n|---|\n{{ .X }} `x | y`', '| a |\n|---|\n{{ .X }} `x \\| y`'],
+        [
+            'an action with a brace in a string',
+            '| a |\n|---|\n| {{ printf "{%s}" .X | print }} |',
+            '| a |\n|---|\n| {{ printf "{%s}" .X \\| print }} |',
+        ],
+    ])('still protects the row of %s', (_name, md, escaped) => {
+        expect(escapeTablePipes(md)).toBe(escaped);
+    });
+
+    // The scan may take a line for a row that marked reads as something else. The stand-in it leaves there is
+    // a pipe again in whatever the line turned out to be.
+    it.each([
+        [
+            'a heading over a row of dashes',
+            '## T | N\n|---|---|\n| `a | b` | {{ .A | print }} |',
+            '| `a | b` | {{ .A | print }} |',
+        ],
+        ['a line indented like code over a row of dashes', '    a | b\n|---|---|\n| `x | y` | c |', '| `x | y` | c |'],
+    ])('leaves no trace in %s, which is no table', (_name, md, row) => {
+        const saved = roundTrip(md);
+
+        expect(structuralCounts(md).table).toBeUndefined();
+        expect(saved.split('\n').at(-1)).toBe(row);
+        expect(roundTrip(saved)).toBe(saved);
+    });
+
+    it.each([
+        ['a row with a cell too many', '| a | b |\n|---|---|\n| 1 | 2 | `x | y` |'],
+        ['a line of nothing but actions', '| a | b |\n|---|---|\n{{ $n := len .Rows }} {{/* `x | y` */}}'],
+        ['the rows under the line that ended the table', '| a | b |\n|---|---|\n{{ range .R }}\n| `x | y` | 2 |'],
+    ])('leaves the pipes of %s alone', (_name, md) => {
+        expect(escapeTablePipes(md)).toBe(md);
+    });
+
+    it('finds the table under an item that opens its fence on the marker line', () => {
+        const list = '1. Run:\n   ```sh\n   nmap\n   ```\n2. ```sh\n   curl\n   ```\n\n';
+
+        expect(escapeTablePipes(`${list}| a | b |\n|---|---|\n| \`x | y\` | 2 |`)).toBe(
+            `${list}| a | b |\n|---|---|\n| \`x \\| y\` | 2 |`,
+        );
+    });
+
+    it('takes a string that holds the end of an action for part of the action', () => {
+        expect(escapeTablePipes('| a | b |\n|---|---|\n| {{ print "}}" | print }} | 2 |')).toBe(
+            '| a | b |\n|---|---|\n| {{ print "}}" \\| print }} | 2 |',
+        );
+    });
+
+    it('finds actions that hold strings in time that grows with the row, not with the square of it', () => {
+        const row = (size: number) => `| a |\n|---|\n| ${'{{ "x '.repeat(size / 7)} |`;
+
+        expect(slowdownWhenInputQuadruples(row, escapeTablePipes, 140_000)).toBeLessThan(GROWTH_IF_QUADRATIC / 2);
+    });
+
+    it('keeps a row that opens with an action whose name only begins with a control word', () => {
+        const md = '| a | b |\n|---|---|\n{{ endpoint }} | 2\n{{ iffy .X }} | 3';
+
+        expect(structuralCounts(md).tableRow).toBe(3);
+        expect(escapeTablePipes(`${md} \`x | y\``)).toBe(`${md} \`x \\| y\``);
+    });
+
+    it('protects with a backslash in a document that holds the stand-in itself', () => {
+        const saved = roundTrip('x \uE002 y\n\n| a | b |\n|---|---|\n| `p | q` | 2 |');
+
+        expect(saved).toBe('x \uE002 y\n\n| a | b |\n|---|---|\n| `p \\| q` | 2 |');
+        expect(roundTrip(saved)).toBe(saved);
+    });
+
+    it('writes the pipes it protects as the stand-in it is asked for', () => {
+        expect(escapeTablePipes('| a | b |\n|---|---|\n| `x | y` | {{ .A | print }} |', '\uE002')).toBe(
+            '| a | b |\n|---|---|\n| `x \uE002 y` | {{ .A \uE002 print }} |',
+        );
+    });
+
+    it('finds actions in time that grows with the row, not with the square of it', () => {
+        const row = (size: number) => `| a |\n|---|\n| ${'{{ x { '.repeat(size / 7)} |`;
+
+        expect(slowdownWhenInputQuadruples(row, escapeTablePipes, 140_000)).toBeLessThan(GROWTH_IF_QUADRATIC / 2);
     });
 });
 

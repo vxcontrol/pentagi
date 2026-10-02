@@ -99,7 +99,7 @@ const newValues: FormValues = {
 const editValues: FormValues = {
     answerType: KnowledgeAnswerType.Other,
     codeLang: '',
-    content: 'existing content',
+    content: 'existing content\n',
     description: '',
     docType: KnowledgeDocType.Answer,
     guideType: undefined,
@@ -162,6 +162,7 @@ describe('KnowledgeForm — update', () => {
         await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
         const [values, dirty] = onSubmit.mock.lastCall!;
         expect(values.question).toBe('updated question');
+        expect(values.content).toBe('existing content\n');
         expect(dirty).toMatchObject({ question: true });
 
         // Save re-disables once the post-save reset clears isDirty — a deterministic
@@ -172,7 +173,7 @@ describe('KnowledgeForm — update', () => {
 
     it('resets untouched fields to the server document returned by onSubmit', async () => {
         const user = userEvent.setup();
-        // Server normalizes `content` (a field the user never edits here). The form's
+        // The server's document carries another `content` (a field the user never edits here). The form's
         // resetOptions keep DIRTY fields at their typed value, so asserting the reset
         // applied the server document means asserting on an untouched field.
         const serverDocument = {
@@ -212,7 +213,7 @@ describe('KnowledgeForm — update', () => {
 
         await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
 
-        // editValues.content is 'existing content'; reaching the server value proves the
+        // editValues.content is 'existing content\n'; reaching the server value proves the
         // form took `documentToFormValues(result.document)`, not the local `values` fallback.
         await waitFor(() => expect(screen.getByLabelText('content')).toHaveValue('server normalized content'));
         expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();

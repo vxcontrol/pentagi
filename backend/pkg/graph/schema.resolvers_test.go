@@ -345,12 +345,13 @@ var graphFlowTemplateCases = []struct {
 	wantErr   string
 }{
 	{
-		name:      "padding is stripped before the row is written",
+		name:      "the title is trimmed and the text is written as it was sent",
 		title:     "  My template  ",
 		text:      "\n  scan the host  \n",
 		wantTitle: "My template",
-		wantText:  "scan the host",
+		wantText:  "\n  scan the host  \n",
 	},
+	{name: "a blank text is refused before the row is written", title: "My template", text: " \n\t", wantErr: "text is required"},
 	{name: "a blank title is refused before the row is written", title: "   ", text: "scan the host", wantErr: "title is required"},
 }
 
@@ -426,14 +427,17 @@ func TestSchemaResolvers_AMissingFlowTemplateIsNotFound(t *testing.T) {
 	}
 }
 
-func TestSchemaResolvers_CreateKnowledgeDocument_RefusesABlankQuestion(t *testing.T) {
+func TestSchemaResolvers_CreateKnowledgeDocument_RefusesABlankQuestionOrContent(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
 		question string
+		content  string
 		wantErr  string
 	}{
-		{name: "an ordinary question is stored", question: "which ports are open?"},
-		{name: "a blank question is refused", question: "   ", wantErr: "question is required"},
+		{name: "an ordinary question is stored", question: "which ports are open?", content: "nmap reports 22 and 443"},
+		{name: "a blank question is refused", question: "   ", content: "nmap reports 22 and 443", wantErr: "question is required"},
+		{name: "a blank content is refused", question: "which ports are open?", content: " \n\t", wantErr: "content is required"},
+		{name: "a padded content reaches the store as it was sent", question: "which ports are open?", content: "  22\n443\n"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			store := &graphKnowledgeStore{}
@@ -441,7 +445,7 @@ func TestSchemaResolvers_CreateKnowledgeDocument_RefusesABlankQuestion(t *testin
 			r.Knowledge = store
 			input := model.CreateKnowledgeDocumentInput{
 				DocType:  model.KnowledgeDocTypeAnswer,
-				Content:  "nmap reports 22 and 443",
+				Content:  tt.content,
 				Question: tt.question,
 			}
 
@@ -449,42 +453,47 @@ func TestSchemaResolvers_CreateKnowledgeDocument_RefusesABlankQuestion(t *testin
 
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
-				assert.Empty(t, store.created, "a refused question reached the store")
+				assert.Empty(t, store.created, "a refused document reached the store")
 				return
 			}
 			require.NoError(t, err)
 			require.Len(t, store.created, 1)
 			assert.Equal(t, tt.question, store.created[0].Question)
+			assert.Equal(t, tt.content, store.created[0].Content)
 		})
 	}
 }
 
-func TestSchemaResolvers_UpdateKnowledgeDocument_RefusesABlankQuestion(t *testing.T) {
+func TestSchemaResolvers_UpdateKnowledgeDocument_RefusesABlankQuestionOrContent(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
 		question *string
+		content  string
 		wantErr  string
 	}{
-		{name: "an ordinary question is stored", question: strPtr("which ports are open?")},
-		{name: "an omitted question leaves the stored one alone", question: nil},
-		{name: "a blank question is refused", question: strPtr("   "), wantErr: "question is required"},
+		{name: "an ordinary question is stored", question: strPtr("which ports are open?"), content: "nmap reports 22 and 443"},
+		{name: "an omitted question leaves the stored one alone", question: nil, content: "nmap reports 22 and 443"},
+		{name: "a blank question is refused", question: strPtr("   "), content: "nmap reports 22 and 443", wantErr: "question is required"},
+		{name: "a blank content is refused", question: nil, content: " \n\t", wantErr: "content is required"},
+		{name: "a padded content reaches the store as it was sent", question: nil, content: "  22\n443\n"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			store := &graphKnowledgeStore{}
 			r := graphResolver(&graphDB{})
 			r.Knowledge = store
-			input := model.UpdateKnowledgeDocumentInput{Content: "nmap reports 22 and 443", Question: tt.question}
+			input := model.UpdateKnowledgeDocumentInput{Content: tt.content, Question: tt.question}
 
 			_, err := r.Mutation().UpdateKnowledgeDocument(graphUserContext(1, "knowledge.edit"), "doc-1", input)
 
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
-				assert.Empty(t, store.updated, "a refused question reached the store")
+				assert.Empty(t, store.updated, "a refused document reached the store")
 				return
 			}
 			require.NoError(t, err)
 			require.Len(t, store.updated, 1)
 			assert.Equal(t, tt.question, store.updated[0].Question)
+			assert.Equal(t, tt.content, store.updated[0].Content)
 		})
 	}
 }

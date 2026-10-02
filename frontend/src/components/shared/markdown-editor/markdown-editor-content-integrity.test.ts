@@ -2,7 +2,6 @@ import { Editor } from '@tiptap/core';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { createMarkdownExtensions } from './markdown-editor-extensions';
-import { escapeCellPipes } from './markdown-editor-marked';
 import { roundTrip, setupEditorJsdom, structuralCounts } from './markdown-editor-test-setup';
 
 beforeAll(setupEditorJsdom);
@@ -171,10 +170,10 @@ describe('generative content-integrity — atoms survive load↔serialize across
                 expect(out.includes(sentinel), `cell "${sentinel}" dropped (i=${i}):\n${doc}\n-->\n${out}`).toBe(true);
             }
 
-            // The atom itself must survive as a code span with its structural pipes escaped for the table — the
-            // sentinel guards the row's cell count, this guards the pipe-bearing content from silent corruption.
+            // The atom itself must survive as the code span it was written as — the sentinel guards the row's
+            // cell count, this guards the pipe-bearing content from silent corruption.
             for (const atom of atoms) {
-                const span = `\`${escapeCellPipes(atom)}\``;
+                const span = `\`${atom}\``;
 
                 expect(out.includes(span), `atom ${span} corrupted (i=${i}):\n${doc}\n-->\n${out}`).toBe(true);
             }

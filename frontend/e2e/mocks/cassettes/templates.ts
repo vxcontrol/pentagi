@@ -41,6 +41,7 @@ export const RICH_TEMPLATE_TEXT = [
     '| Field | Value |',
     '| --- | --- |',
     '| Scope | {{SCOPE}} |',
+    '',
 ].join('\n');
 
 export const TEMPLATE_DETAIL = makeTemplate('11', 'E2E Seed Template', RICH_TEMPLATE_TEXT);

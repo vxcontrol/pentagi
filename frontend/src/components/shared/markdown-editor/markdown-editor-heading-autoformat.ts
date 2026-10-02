@@ -27,9 +27,10 @@ const containsHardBreak = (node: PMNode, hardBreak: null | PMNode['type']): bool
 // Two guards keep the promotion sound:
 //   • it keys off the FIRST child, not textContent: a `# ` AFTER a hardBreak (Shift+Enter) must stay body text,
 //     and there the first child is the pre-break text, so the block does not read as starting with `#`;
-//   • it skips a paragraph that CONTAINS a hardBreak: a heading is single-line, so promoting a multi-line block
-//     (e.g. `# a`⏎`# b`) would emit `# a  \n# b`, which re-parses as TWO headings on the next load. Such a
-//     block stays a paragraph; escapeLineLeadingBlockMarkers then escapes its leading `# ` so it round-trips.
+//   • it skips a paragraph that CONTAINS a line break, hard or soft: a heading is single-line, so promoting a
+//     multi-line block (e.g. `# a`⏎`# b`) would emit `# a  \n# b`, which re-parses as TWO headings on the next
+//     load. Such a block stays a paragraph; escapeLineLeadingBlockMarkers then escapes its leading `# ` so it
+//     round-trips.
 export const HeadingAutoformat = Extension.create({
     addProseMirrorPlugins() {
         return [

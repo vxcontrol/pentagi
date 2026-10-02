@@ -51,10 +51,11 @@ export const formSchema = z
     .object({
         answerType: z.nativeEnum(KnowledgeAnswerType).optional(),
         codeLang: optionalTrimmed(KNOWLEDGE_LIMITS.codeLang, 'Code language'),
+        // The body is a document: it is sent as it was written, the line break it ends with included, and the
+        // limit counts all of it, as the endpoint does.
         content: z
             .string()
-            .trim()
-            .min(1, { message: 'Content is required' })
+            .refine((value) => value.trim() !== '', { message: 'Content is required' })
             .refine(withinLimit(KNOWLEDGE_LIMITS.content), {
                 message: `Content must be ${KNOWLEDGE_LIMITS.content} characters or fewer`,
             }),
@@ -229,7 +230,7 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
                 // `isDirty`/`canSubmit` at submit time.
                 const result = await onSubmit(values, form.formState.dirtyFields as DirtyFlags);
 
-                // The backend may trim/normalize fields, so reset to its returned document when present.
+                // The returned document is the one that is stored, so the form is reset to it when present.
                 const resetValues = result.document ? documentToFormValues(result.document) : values;
 
                 // Reset BEFORE the caller navigates so `isDirty` is false by the
@@ -259,7 +260,7 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
 
         // `form.getValues()` returns raw field state (no zod transforms applied),
         // so we run it through the schema explicitly. This way the dialog path
-        // produces the same trimmed/normalized values as the form-button path
+        // produces the same parsed values as the form-button path
         // (which gets parsed values directly from `handleSubmit`'s callback).
         const parsed = formSchema.safeParse(form.getValues());
 
