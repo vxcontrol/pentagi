@@ -1722,6 +1722,7 @@ These settings control the integration with various search engines used for web 
 | GoogleAPIKey | `GOOGLE_API_KEY`     | *(none)*      | API key for Google Search                                |
 | GoogleCXKey  | `GOOGLE_CX_KEY`      | *(none)*      | Custom Search Engine ID for Google Search                |
 | GoogleLRKey  | `GOOGLE_LR_KEY`      | `lang_en`     | Language restriction for Google Search (e.g., `lang_en`) |
+| GoogleCSEURL | `GOOGLE_CSE_URL`     | *(empty: Google's endpoint)* | Base URL of a Custom Search JSON API-compatible endpoint. Accepts `https://host/` or `https://host/customsearch/v1`. Google discontinues the Custom Search JSON API on January 1, 2027 |
 
 ### Traversaal Search
 

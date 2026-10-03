@@ -127,7 +127,12 @@ func (g *google) newSearchService(ctx context.Context) (*customsearch.Service, e
 		base: client.Transport,
 	}
 
-	svc, err := customsearch.NewService(ctx, option.WithHTTPClient(client))
+	opts := []option.ClientOption{option.WithHTTPClient(client)}
+	if endpoint := g.endpoint(); endpoint != "" {
+		opts = append(opts, option.WithEndpoint(endpoint))
+	}
+
+	svc, err := customsearch.NewService(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create google search service: %v", err)
 	}
@@ -183,4 +188,24 @@ func (g *google) lrKey() string {
 	}
 
 	return g.cfg.GoogleLRKey
+}
+
+// endpoint returns the base URL override for the Custom Search API, or "" to use
+// Google's default. GOOGLE_CSE_URL accepts either a base URL
+// ("https://example.com/") or the full API URL
+// ("https://example.com/customsearch/v1"); the client library appends
+// "customsearch/v1" itself, so that suffix is stripped and a trailing slash added.
+func (g *google) endpoint() string {
+	if g.cfg == nil {
+		return ""
+	}
+
+	u := strings.TrimSpace(g.cfg.GoogleCSEURL)
+	if u == "" {
+		return ""
+	}
+
+	u = strings.TrimRight(u, "/")
+	u = strings.TrimSuffix(u, "/customsearch/v1")
+	return strings.TrimRight(u, "/") + "/"
 }
