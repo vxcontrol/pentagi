@@ -1468,7 +1468,7 @@ Examples:
 	ServerSettingsTrustedProxiesDesc = "Comma-separated proxy IPs/CIDRs whose X-Forwarded-For is trusted (empty: trust none)"
 
 	ServerSettingsProxyURL     = "HTTP/HTTPS Proxy"
-	ServerSettingsProxyURLDesc = "Proxy for outbound requests to LLMs and external tools (not used for Docker API access)"
+	ServerSettingsProxyURLDesc = "Proxy for backend LLM, embedding and search requests (not for sandboxes, scraper, Graphiti)"
 
 	ServerSettingsProxyUsername     = "Proxy Username"
 	ServerSettingsProxyUsernameDesc = "Username for proxy authentication (optional)"
@@ -1571,7 +1571,7 @@ Examples:
 
 Set this only when PentAGI sits behind a reverse proxy or load balancer you control. Leave empty to trust none. Example: 10.0.0.0/8,172.16.0.0/12`
 
-	ServerSettingsProxyURLHelp = `HTTP or HTTPS proxy for outbound requests to LLM providers and external tools. Not used for Docker API communication.`
+	ServerSettingsProxyURLHelp = `HTTP or HTTPS proxy for every backend request to LLM, embedding and search providers, local endpoints included, and for update checks; the installer's own update and download calls use it too. Sandbox containers, the scraper, Graphiti and Docker API communication do not use it.`
 
 	ServerSettingsHTTPClientTimeoutHelp = `Timeout in seconds for all external HTTP/HTTPS API calls including:
 • LLM provider requests (OpenAI, Anthropic, Bedrock, etc.)
@@ -1838,7 +1838,7 @@ const (
 Critical for penetration testing workflows requiring network scanning, custom tools, and secure task isolation.`
 
 	// General help text
-	ToolsDockerGeneralHelp = `Each AI agent task runs in an isolated Docker container with two ports (28000-32000 range) automatically allocated per flow. Worker containers are created on-demand from default images or agent-selected ones.
+	ToolsDockerGeneralHelp = `Each AI agent task runs in an isolated Docker container with two ports allocated per flow from the 2000-port window that starts at DOCKER_PORTS_BASE (28000-29999 by default). Worker containers are created on-demand from default images or agent-selected ones.
 
 Basic setup requires enabling capabilities: Docker Access allows spawning additional containers for specialized tools, while Network Admin grants low-level network permissions essential for scanning tools like nmap.
 
@@ -1934,7 +1934,7 @@ Security Note: Host network mode reduces container isolation. Only use when nece
 
 	ToolsDockerPublicIPHelp = `Public IP Address enables out-of-band (OOB) attack techniques by providing workers with a reachable address for reverse connections.
 
-Workers automatically receive two random ports (28000-32000 range) mapped to this IP for receiving callbacks from exploited targets.
+Each flow's worker gets two ports from the 2000-port window that starts at DOCKER_PORTS_BASE (28000-29999 by default), published on this IP for receiving callbacks from exploited targets. The default 0.0.0.0 publishes them on every interface of the host.
 
 By default agents will try to get public address from the services api.ipify.org, ipinfo.io/ip or ifconfig.me.`
 

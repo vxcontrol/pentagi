@@ -78,8 +78,7 @@ func TestLLMProviderForm_GivesEveryOfferedDoorItsOwnNameDescriptionAndURL(t *tes
 	}
 }
 
-// BEDROCK_CONFIG_PATH is read inside the container, where a path on the host does not exist.
-// The env file has no PENTAGI_BEDROCK_CONFIG_PATH line, as every host installed from a release.
+// The env file has no PENTAGI_BEDROCK_CONFIG_PATH line, as on a host whose .env predates the variable.
 func TestLLMProviderForm_HandleSave_MountsABedrockConfigTypedAsAFileOnTheHost(t *testing.T) {
 	onHost := filepath.Join(t.TempDir(), "my-bedrock.provider.yml")
 	if err := os.WriteFile(onHost, []byte("simple:\n  model: zai.glm-4.7-flash\n"), 0o600); err != nil {

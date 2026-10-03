@@ -2,7 +2,7 @@ import { Editor } from '@tiptap/core';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { createMarkdownExtensions } from './markdown-editor-extensions';
-import { roundTrip, setupEditorJsdom, structuralCounts } from './markdown-editor-test-setup';
+import { cellsOf, roundTrip, setupEditorJsdom, structuralCounts } from './markdown-editor-test-setup';
 
 beforeAll(setupEditorJsdom);
 
@@ -138,7 +138,7 @@ describe('generative content-integrity — atoms survive load↔serialize across
     // A raw `|` inside a table cell is the one context the single-atom oracle above cannot generate: marked
     // splits the row on it before inline-tokenizing, so an unprotected pipe drops the trailing cells. Build
     // tables whose cells carry pipe-bearing atoms inside code spans / Go actions, plus a sentinel trailing
-    // cell; assert the sentinel and the atom's words survive and the table converges.
+    // cell; assert the cells read back, that the sentinel and the atom's words survive and the table converges.
     it('pipe-bearing atoms inside table cells keep their row intact and converge', { timeout: 30000 }, () => {
         const rng = mulberry32(0x7ab1e);
         const pipeAtoms = ['x | y', '{{.Host | lower}}', 'a || b', 'grep foo | wc -l', 'no-pipe-here'];
@@ -165,13 +165,17 @@ describe('generative content-integrity — atoms survive load↔serialize across
             const out = roundTrip(doc);
 
             expect(roundTrip(out), `did not converge (i=${i}):\n${doc}\n-->\n${out}`).toBe(out);
+            // The saved text alone cannot show a row that was read as a line of text: it is saved as it was.
+            expect(cellsOf(out), `cells changed (i=${i}):\n${doc}\n-->\n${out}`).toEqual([
+                'code',
+                'note',
+                ...atoms.flatMap((atom, row) => [atom, sentinels[row]]),
+            ]);
 
             for (const sentinel of sentinels) {
                 expect(out.includes(sentinel), `cell "${sentinel}" dropped (i=${i}):\n${doc}\n-->\n${out}`).toBe(true);
             }
 
-            // The atom itself must survive as the code span it was written as — the sentinel guards the row's
-            // cell count, this guards the pipe-bearing content from silent corruption.
             for (const atom of atoms) {
                 const span = `\`${atom}\``;
 

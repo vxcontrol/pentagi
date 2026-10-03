@@ -71,7 +71,7 @@ const createTunedMarked = () => {
             //   • escape   — keep `\`+punct literal (`\.` `\*` `\|` `\\`); marked's default DROPS the backslash
             //                (CommonMark unescape), silently corrupting regex/paths on the first load. The
             //                `\#`/`\>` counterpart to the paragraph serializer is NOT here: an inline tokenizer
-            //                fires at any position, so it also ate the backslash mid-line (`grep '\<root\>'`).
+            //                fires at any position, so it would also eat the backslash mid-line (`grep '\<root\>'`).
             //                It lives in the Lexer's inlineTokens override below, which sees line starts.
             //   • html/tag — keep `<xml-like>` tags literal (marked swallows real-HTML-element names)
             //   • def      — keep `[label]: target` lines as the text they are. marked lifts a definition out
@@ -83,8 +83,9 @@ const createTunedMarked = () => {
             //                shown and saved without its brackets. Only a web address or an e-mail is a
             //                link; anything else is the text it was written as, brackets and all — taken
             //                whole, or the bare-URL rule would find a link inside `<git+https://…>`.
-            // NB: autolink/url are intentionally NOT neutralised — a bare `https://…`, `<url>` or email is
-            // meant to become a link (see markdown-editor-extensions.ts link config, kept symmetric with typing).
+            // NB: beyond the `autolink` case above and the `url` override below, autolink/url are intentionally
+            // NOT neutralised — a bare `https://…`, `<url>` or email is meant to become a link (see
+            // markdown-editor-extensions.ts link config, kept symmetric with typing).
             // NB: named HTML entities (`&lt; &gt; &amp; &quot;`) are decoded downstream — @tiptap/markdown's
             // token parsing runs @tiptap/core's decodeHtmlEntities, so a bare-prose `&lt;` becomes `<` (fixes
             // HTML-encoding artifacts from ingestion). Numeric refs (`&#123;`) and anything inside code are
@@ -230,7 +231,7 @@ const createTunedMarked = () => {
         }
 
         // Undo the paragraph serializer's line-leading `\#`/`\>` here rather than in an inline tokenizer or in
-        // `lex`. An inline tokenizer has no notion of position and ate the backslash mid-line; `lex` runs
+        // `lex`. An inline tokenizer has no notion of position and would eat the backslash mid-line; `lex` runs
         // BEFORE block tokenization, so unescaping there hands marked a live `#`/`>` and the paragraph the
         // escape exists to protect becomes a heading or a quote again.
         // A table cell is left alone: it cannot open a heading or a quote, cellText never escapes one, and a
@@ -820,9 +821,9 @@ export const renderInline = (nodes: JSONContent[], helpers: MarkdownRendererHelp
 // cells on the next load. Pad an odd run by one backslash — the cell gains a `\`, the table keeps its cells,
 // and the padded form is byte-stable from the first save.
 // A pipe inside a Go action is the template's pipeline operator. Escaping it makes text/template reject the
-// whole prompt (`unexpected "\" in operand`), so the file cannot be saved at all — and every save re-added the
+// whole prompt (`unexpected "\" in operand`), so the file cannot be saved at all — and every save would re-add the
 // backslash, leaving no way out from rich mode. The loader counts cells with action pipes masked, so leaving
-// them raw no longer skews the header/delimiter comparison.
+// them raw does not skew the header/delimiter comparison.
 // A pipe inside a code span is escaped as well, as GFM asks. Whichever opens first is what marked reads
 // there: an action that holds a raw string is an action, a code span that holds an action is code, and the
 // action inside it still keeps its pipes. This is how a row is written once it has been edited; one that
@@ -891,8 +892,8 @@ export const escapeCellPipes = (text: string): string => {
 };
 
 // GFM has no headerless table, and renderTableToMarkdown answers that by emitting an EMPTY header row above
-// the demoted rows — so every header-off + save + reload cycle grew the table by one blank row and the header
-// switch silently flipped back on. Promote the first row instead: the row count and every cell survive, and a
+// the demoted rows — so every header-off + save + reload cycle would grow the table by one blank row and the header
+// switch would silently flip back on. Promote the first row instead: the row count and every cell survive, and a
 // second save is a no-op because the promoted table already has a header.
 const withPromotedHeaderRow = (node: JSONContent): JSONContent => {
     const rows = node.content ?? [];

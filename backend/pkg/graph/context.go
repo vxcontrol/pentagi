@@ -230,8 +230,8 @@ const (
 	maxFlowTemplateTextLen  = 65536
 )
 
-// The title is one line and is stored trimmed. The text is a document and is stored as it was sent, the line
-// break it ends with included; only one that holds nothing but whitespace is refused.
+// validateFlowTemplateFields returns the title trimmed, as the one line it is, and the text as it was sent,
+// the line break it ends with included: the text is a document. A text of nothing but whitespace is refused.
 func validateFlowTemplateFields(title, text string) (string, string, error) {
 	title = strings.TrimSpace(title)
 

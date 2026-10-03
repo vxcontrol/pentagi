@@ -169,8 +169,8 @@ function useMarkdownEditor({
     placeholder = 'Write something…',
     value,
 }: UseMarkdownEditorOptions): Editor | null {
-    // Suppress echoes of our own output: the markdown round-trip re-serializes slightly (whitespace/list
-    // markers/blank lines), and those normalizations must not flip RHF's isDirty as if the user had edited.
+    // Suppress echoes of our own output: the markdown round-trip can re-serialize a document (a decoded HTML
+    // entity, CRLF line endings), and that must not flip RHF's isDirty as if the user had edited.
     const lastEmittedRef = useRef<string>(value);
 
     // Ignore the onUpdate echoes tiptap fires for the initial parse during view construction — forwarding
@@ -279,9 +279,10 @@ function useMarkdownEditor({
         }
 
         // On mount the construction-time parse already reflects `initialContent`, so compare against THAT, not
-        // getMarkdown(): serialization normalizes most real documents, so `getMarkdown() !== value` on mount
-        // would re-parse the identical doc — doubling mount cost for exactly the large documents where parse
-        // dominates. After mount, getMarkdown() is the right divergence check for external form.reset syncs.
+        // getMarkdown(): serialization can differ from the source (a decoded HTML entity, CRLF line endings), so
+        // `getMarkdown() !== value` on mount would re-parse the identical doc — doubling mount cost for exactly
+        // the large documents where parse dominates. After mount, getMarkdown() is the right divergence check
+        // for external form.reset syncs.
         const isExternalChange = hasResetInitialHistoryRef.current
             ? editor.getMarkdown() !== value
             : value !== initialContent;

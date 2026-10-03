@@ -67,8 +67,16 @@ func (f *fakeProvider) CallWithExtraOptions(
 	return f.chainAnswer(chain)
 }
 
-func (f *fakeProvider) GetToolCallIDTemplate(ctx context.Context, _ templates.Prompter) (string, error) {
-	return f.Call(ctx, pconfig.OptionsTypeSimple, "hi")
+// failoverPrompter marks the prompter a path hands in.
+type failoverPrompter struct{ templates.Prompter }
+
+func (f *fakeProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
+	input := "no prompter"
+	if _, isMarked := prompter.(failoverPrompter); isMarked {
+		input = "hi"
+	}
+
+	return f.Call(ctx, pconfig.OptionsTypeSimple, input)
 }
 
 func failoverContent(resp *llms.ContentResponse, err error) (string, error) {
@@ -99,7 +107,7 @@ var failoverPaths = []struct {
 			[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")}, nil, nil))
 	}},
 	{"the tool call id template", func(ctx context.Context, prv Provider) (string, error) {
-		return prv.GetToolCallIDTemplate(ctx, nil)
+		return prv.GetToolCallIDTemplate(ctx, failoverPrompter{})
 	}},
 }
 

@@ -309,7 +309,7 @@ func TestController_GetApplyChangesConfig_DescribesAConfigPathChangeAndCallsItCr
 		"OLLAMA_SERVER_CONFIG_PATH", "PENTAGI_OLLAMA_SERVER_CONFIG_PATH",
 		"LLM_SERVER_CONFIG_PATH", "PENTAGI_LLM_SERVER_CONFIG_PATH",
 	} {
-		t.Run(name, func(t *testing.T) {
+		t.Run("a change of "+name, func(t *testing.T) {
 			c, _ := controllerOverExampleEnv(t)
 			require.NoError(t, c.Commit())
 			require.False(t, c.GetApplyChangesConfig().HasCritical, "the example env is critical before anything changed")

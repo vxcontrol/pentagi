@@ -767,25 +767,9 @@ func getImageInfo(ctx context.Context, cli *client.Client, imageName string) *Im
 	return imageInfo
 }
 
-// parseImageRef splits a Docker image reference into the repository and tag the update
-// server matches on, plus whatever digest the reference or the daemon carried.
-//
-// The shape is [registry[:port]/]path[:tag][@digest], and the two colons are the trap: the
-// one that separates a registry port and the one that separates a tag look identical. They
-// are told apart by position, not by content — a tag colon is the LAST colon after the last
-// slash. The previous rule guessed by content, treating any tag containing a dot as a port
-// number, which misread every version-numbered tag the compose files use: "grafana/grafana"
-// at "11.4.0" became a repository literally named "grafana/grafana:11.4.0" at tag "latest".
-//
-// That failure is silent where it matters. The update server answers on the repository and
-// tag pair, so a mangled pair simply gets no answer — and no answer is indistinguishable
-// from "nothing to update".
 // isDockerHubHost reports whether a leading path element is one of the names
-// Docker Hub answers to.
-//
-// A closed list rather than a shape test. "Contains a dot or a colon" describes
-// every registry there is, and treating every registry as Docker Hub is exactly
-// how the host came to be dropped from references that need it.
+// Docker Hub answers to. It is a closed list and not a shape test: "contains a
+// dot or a colon" describes every registry there is.
 func isDockerHubHost(head string) bool {
 	switch head {
 	case "docker.io", "index.docker.io", "registry-1.docker.io", "registry.hub.docker.com":
@@ -795,6 +779,14 @@ func isDockerHubHost(head string) bool {
 	}
 }
 
+// parseImageRef splits a Docker image reference into the repository and tag the update
+// server matches on, plus whatever digest the reference or the daemon carried.
+//
+// The shape is [registry[:port]/]path[:tag][@digest]. The colon of a registry port and the
+// colon of a tag are told apart by position, not by content: a tag colon is the last colon
+// after the last slash, so a version-numbered tag such as "11.4.0" is not taken for a port.
+// A mangled pair fails silently: the update server matches on the repository and tag pair,
+// and a pair it does not track is offered nothing, which reads as "nothing to update".
 func parseImageRef(imageRef, imageID string) *ImageInfo {
 	if imageRef == "" {
 		return nil
@@ -820,14 +812,10 @@ func parseImageRef(imageRef, imageID string) *ImageInfo {
 	// The service stores a reference the way compose writes it: bare for Docker
 	// Hub, host and all for anywhere else — `gcr.io/cadvisor/cadvisor`, not
 	// `cadvisor/cadvisor`. Those two are different images: the second is a Docker
-	// Hub repository that has nothing to do with cAdvisor. Dropping the host for
-	// every registry made this client report the second while running the first,
-	// and since the match is an exact string comparison, the component simply
-	// resolved to nothing — answered `repository_not_tracked` forever, and
-	// dragging its whole stack's resolution down to `not_tracked` with it.
-	//
-	// It stayed invisible until cadvisor and pgexporter — the only two components
-	// not on Docker Hub — started being reported at all.
+	// Hub repository that has nothing to do with cAdvisor. The match is an exact
+	// string comparison, so a reference of another registry reported without its
+	// host is answered `repository_not_tracked` and takes its whole stack's
+	// resolution down to `not_tracked`.
 	if head, rest, found := strings.Cut(imageRef, "/"); found {
 		if isDockerHubHost(head) {
 			imageRef = rest

@@ -1894,7 +1894,7 @@ googleSearch: &functions.GoogleSearchFunc{
 ```
 
 The proxy setting is essential for:
-- Routing all outbound API requests through a controlled proxy
+- Routing the backend's LLM, embedding, search and update-check requests through a controlled proxy (sandbox containers, the scraper and Graphiti do not use it)
 - Implementing network-level security policies
 - Enabling access to external services from restricted networks
 - Monitoring and auditing external API usage

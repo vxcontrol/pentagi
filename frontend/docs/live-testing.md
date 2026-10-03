@@ -579,27 +579,33 @@ branch that cannot be reached.
 **What was not touched is saved as it was written.** A body that was loaded keeps its
 own layout through a save: the blank lines between its blocks and how many there were,
 the spaces on a blank line, the bullet character, the numbers and the leading spaces of
-its lists, every row of a table as the line it was (its padding, its pipes — bare or escaped
-inside a code span — and a line of text written right under the table), a code block as it
-stood (its fence, its indentation, a block written by indentation and not by a fence),
-the fence of a code span, a bare URL, the link around an image, the underline of a setext
-heading, the spaces a heading or a list ended with, a line break that is not a hard break.
-A case that types one character and compares the stored body with the original should find
-that character and nothing else outside the block it was typed into; inside that block
-the editor writes its own form — a table row with one space around each cell where the table
-was written that way and padded to its column otherwise, `\|` for a pipe in a code span of that
-row, a code block between fences or four spaces in. What is kept gives way wherever it would be
-read as something else: under a list, a table or a fenced block written a few spaces in goes
-to the margin, text goes there when the list would take it for its last item's, and inside a list
-item a code block is written between fences at the item's column. The body is stored as it was sent,
-the line break it ends with included: neither the forms nor the backend trim it, and only
-the single-line fields (title, question, description, code language) are trimmed. A Go template
-action `{{ … }}` is literal text to the editor — nothing inside it is read as markdown and a pipe
-in it is never escaped — and a line that opens with a control action (`{{ range }}`, `{{ end }}`)
-right under a table is the template's line, not a row. What still differs is not a defect of such a case:
-a link typed into the editor, as opposed to one that was loaded, is stored as `[url](url)`;
-a named HTML entity outside code and outside an action is decoded (`&amp;` becomes `&`);
-a list item that opens with indented code is written with a fence; and a document with CRLF line endings is saved with LF.
+its lists, every row of a table as the line it was (its padding, its pipes — bare or
+escaped inside a code span — and a line of text written right under the table),
+a code block as it stood (its fence, its indentation, a block written by indentation and
+not by a fence), the fence of a code span, a bare URL, the link around an image,
+the underline of a setext heading, the spaces a heading or a list ended with, a line break
+that is not a hard break. A case that types one character and compares the stored body
+with the original should find that character and nothing else outside the block
+it was typed into; inside that block the editor writes its own form — a table row
+with one space around each cell where the table was written that way and padded
+to its column otherwise, `\|` for a pipe in a code span of that row, a code block between
+fences or four spaces in. What is kept gives way wherever it would be read as something else:
+under a list, a table or a fenced block written a few spaces in goes to the margin,
+text goes there when the list would take it for its last item's, and
+inside a list item a code block is written between fences at the item's column.
+The body is stored as it was sent, the line break it ends with included:
+neither the forms nor the backend trim it, and only the single-line fields
+(title, question, description, code language) are trimmed.
+
+A Go template action `{{ … }}` is literal text to the editor — nothing inside
+it is read as markdown and a pipe in it is never escaped — and a line that
+opens with a control action (`{{ range }}`, `{{ end }}`) right under a table is
+the template's line, not a row. What still differs is not a defect of such a case:
+a link typed into the editor, as opposed to one that was loaded,
+is stored as `[url](url)`; a named HTML entity outside code and
+outside an action is decoded (`&amp;` becomes `&`);
+a list item that opens with indented code is written with a fence;
+and a document with CRLF line endings is saved with LF.
 
 A template's body, a knowledge document's content and both halves of a prompt are
 the same component. The document tells you to "edit" those entities; this is what

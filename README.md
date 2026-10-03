@@ -882,13 +882,16 @@ For multi-user setups, an authenticated administrator can manage local users thr
 >
 > `LLM_SERVER_*` environment variables are experimental feature and will be changed in the future. Right now you can use them to specify custom LLM server URL and one model for all agent types.
 >
-> `PROXY_URL` is a global proxy URL for all LLM providers and external search systems. You can use it for isolation from external networks.
+> `PROXY_URL` routes the backend's own HTTP calls through a proxy: every request to LLM and embedding providers and to search engines — self-hosted ones such as Ollama or SearXNG included, as there is no `NO_PROXY` exemption — and the update check. Sandbox containers (where agents run their commands), the scraper, the Graphiti service, OAuth sign-in, and Langfuse/OpenTelemetry export do not use it, so if you need isolation from external networks, restrict their outbound traffic at the network level.
 >
 > The `docker-compose.yml` file runs the PentAGI service as root user because it needs access to docker.sock for container management. If you're using TCP/IP network connection to Docker instead of socket file, you can remove root privileges and use the default `pentagi` user for better security.
 
 ### Accessing PentAGI from External Networks
 
-By default, PentAGI binds to `127.0.0.1` (localhost only) for security. To access PentAGI from other machines on your network, you need to configure external access.
+By default, the PentAGI web interface and the other compose services bind to `127.0.0.1` (localhost only) for security. To access PentAGI from other machines on your network, you need to configure external access.
+
+> [!IMPORTANT]
+> Flow sandboxes are not bound to localhost. Each flow publishes two TCP ports for out-of-band callbacks such as reverse shells, taken from the 2000-port window that starts at `DOCKER_PORTS_BASE` (`28000`–`29999` by default), on `DOCKER_PUBLIC_IP` — `0.0.0.0` by default, that is every interface of the Docker host. Docker routes published ports around `ufw` rules and lets them through `firewalld` with its own `docker` zone, so restrict this range with a firewall in front of the host or, with Docker's default iptables backend, with rules in the `DOCKER-USER` chain. With `DOCKER_NETWORK=host`, sandboxes share the host's network stack, so their listeners are exposed without any port mapping.
 
 #### Configuration Steps
 
@@ -3100,7 +3103,7 @@ Example Docker daemon mirror configuration:
 }
 ```
 
-On Linux, this is typically configured in `/etc/docker/daemon.json`. On Docker Desktop, use the equivalent Docker Engine or proxy settings. A Docker Hub mirror covers Docker Hub-hosted images such as `vxcontrol/*`, but the main Compose stack already includes `quay.io/prometheuscommunity/postgres-exporter`, and the optional observability stack includes `gcr.io/cadvisor/cadvisor`. Those registries still need direct access or individually approved proxy/mirror paths.
+On Linux, this is typically configured in `/etc/docker/daemon.json`. On Docker Desktop, use the equivalent Docker Engine or proxy settings. A Docker Hub mirror covers Docker Hub-hosted images such as `vxcontrol/*`, but the main Compose stack already includes `quay.io/prometheuscommunity/postgres-exporter`, the optional observability stack includes `gcr.io/cadvisor/cadvisor`, and the optional Langfuse stack includes `cgr.dev/chainguard/minio`. Those registries still need direct access or individually approved proxy/mirror paths.
 
 See the official Docker documentation for [registry mirrors](https://docs.docker.com/docker-hub/image-library/mirror/) and [daemon proxy configuration](https://docs.docker.com/engine/daemon/proxy/).
 
@@ -3706,7 +3709,7 @@ EMBEDDING_STRIP_NEW_LINES=true  # Whether to remove new lines from text before e
 EMBEDDING_MAX_TEXT_BYTES=8192   # Max bytes of text sent to embedding model per document (byte proxy for token limit)
 
 # Advanced settings
-PROXY_URL=                      # Optional proxy for all API calls
+PROXY_URL=                      # Optional proxy for all backend LLM, embedding, search and update-check calls
 HTTP_CLIENT_TIMEOUT=600         # Timeout in seconds for external API calls (default: 600, 0 = no timeout)
 TERMINAL_TOOL_TIMEOUT=1200      # Default timeout in seconds for terminal tool commands when timeout=0 or negative (range: 1–10800; values <= 0 or above 10800 are clamped to 10800 = 3 hours)
 

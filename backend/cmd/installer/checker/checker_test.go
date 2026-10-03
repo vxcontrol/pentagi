@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -59,6 +60,51 @@ func TestChecker_NeverClaimsExternalForAStackThatIsNotConnected(t *testing.T) {
 				if flags != [2]bool{tt.connected, tt.external} {
 					t.Errorf("%s: connected=%t external=%t, want %t and %t", stack, flags[0], flags[1], tt.connected, tt.external)
 				}
+			}
+		})
+	}
+}
+
+func TestChecker_GatherPentagiInfo_LooksForTheExtractedStackBesideTheEnvFile(t *testing.T) {
+	tests := []struct {
+		name              string
+		beside, elsewhere []string // files beside the env file, and in the working directory
+		want              bool
+	}{
+		{
+			"the compose file and both examples beside the env file",
+			[]string{"docker-compose.yml", "example.custom.provider.yml", "example.ollama.provider.yml"}, nil, true,
+		},
+		{"the compose file alone", []string{"docker-compose.yml"}, nil, false},
+		{"the ollama example missing", []string{"docker-compose.yml", "example.custom.provider.yml"}, nil, false},
+		{"the custom example missing", []string{"docker-compose.yml", "example.ollama.provider.yml"}, nil, false},
+		{"the compose file missing", []string{"example.custom.provider.yml", "example.ollama.provider.yml"}, nil, false},
+		{
+			"the examples in the working directory only",
+			[]string{"docker-compose.yml"}, []string{"example.custom.provider.yml", "example.ollama.provider.yml"}, false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			envDir, workDir := t.TempDir(), t.TempDir()
+			for dir, names := range map[string][]string{envDir: tt.beside, workDir: tt.elsewhere} {
+				for _, name := range names {
+					if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+						t.Fatalf("write %s: %v", name, err)
+					}
+				}
+			}
+			t.Chdir(workDir)
+
+			handler := &defaultCheckHandler{mx: &sync.Mutex{}, appState: &mockState{envPath: filepath.Join(envDir, ".env")}}
+			got := &CheckResult{}
+			if err := handler.GatherPentagiInfo(t.Context(), got); err != nil {
+				t.Fatalf("gather: %v", err)
+			}
+
+			if got.PentagiExtracted != tt.want {
+				t.Errorf("PentagiExtracted = %t, want %t", got.PentagiExtracted, tt.want)
 			}
 		})
 	}

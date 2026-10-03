@@ -155,8 +155,7 @@ func TestFs_VerifyStackIntegrity_RestoresAProviderExampleThatIsNotAFile(t *testi
 	}
 }
 
-// Over the embedded files and the compose files beside them: Docker creates a directory in
-// place of a file a compose file mounts and the stack does not extract.
+// Over the embedded files and the compose files at the repository root.
 func TestFs_EnsureStackIntegrity_ExtractsEveryFileItsComposeFileMounts(t *testing.T) {
 	withDefault := regexp.MustCompile(`\$\{[A-Za-z0-9_]+:?-([^}]*)\}`)
 	for _, tc := range []struct {
@@ -179,7 +178,7 @@ func TestFs_EnsureStackIntegrity_ExtractsEveryFileItsComposeFileMounts(t *testin
 			"./observability/jaeger", "./observability/loki/config.yml", "./observability/otel",
 		}},
 	} {
-		t.Run(string(tc.stack), func(t *testing.T) {
+		t.Run("the "+string(tc.stack)+" stack", func(t *testing.T) {
 			content, err := os.ReadFile(filepath.Join(repositoryRoot(t), tc.composeFile))
 			require.NoError(t, err)
 			var compose struct {
@@ -221,17 +220,15 @@ func TestFs_EnsureStackIntegrity_ExtractsEveryFileItsComposeFileMounts(t *testin
 	}
 }
 
-// Over the embedded files themselves. Subtests are keyed by unit: both replace the directory
-// with the example, and only the verification of an extracted stack spares an edited example
-// from a forced update.
+// Over the embedded files themselves; subtests are keyed by unit.
 func TestFs_ADirectoryInPlaceOfAProviderExampleBecomesTheExample(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		run        func(fileSystemOperations, context.Context, ProductStack, *operationState) error
 		wantCustom string
 	}{
-		{"ensureStackIntegrity", fileSystemOperations.ensureStackIntegrity, "the example"},
-		{"verifyStackIntegrity", fileSystemOperations.verifyStackIntegrity, "edited: true\n"},
+		{"a forced extraction overwrites the edited example", fileSystemOperations.ensureStackIntegrity, "the example"},
+		{"a forced verification keeps the edited example", fileSystemOperations.verifyStackIntegrity, "edited: true\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			embedded := files.NewFiles()
@@ -312,21 +309,21 @@ func TestFs_CleanupStackFiles_RemovesEveryFileOfTheStackAndNothingElse(t *testin
 
 func TestFs_EnsureFileFromEmbed_CopiesOnlyWhatIsMissingUnlessForced(t *testing.T) {
 	for _, tc := range []struct {
-		name          string
-		onDisk, force bool
-		want          []string
+		name                     string
+		onDisk, directory, force bool
+		want                     []string
 	}{
-		{"a missing file is extracted", false, false, []string{"test.yml"}},
-		{"a file on disk is kept", true, false, nil},
-		{"a file on disk is overwritten when forced", true, true, []string{"test.yml"}},
-		{"a directory in its place is replaced", false, false, []string{"test.yml"}},
+		{"a missing file is extracted", false, false, false, []string{"test.yml"}},
+		{"a file on disk is kept", true, false, false, nil},
+		{"a file on disk is overwritten when forced", true, false, true, []string{"test.yml"}},
+		{"a directory in its place is replaced", false, true, false, []string{"test.yml"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ops, embedded, dir := fsOperations(t)
 			embedded.AddFile("test.yml", []byte("test content"))
 			if tc.onDisk {
 				require.NoError(t, os.WriteFile(filepath.Join(dir, "test.yml"), []byte("existing"), 0o644))
-			} else if strings.HasPrefix(tc.name, "a directory") {
+			} else if tc.directory {
 				require.NoError(t, os.Mkdir(filepath.Join(dir, "test.yml"), 0o755))
 			}
 			state := testOperationState(t)

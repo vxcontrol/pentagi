@@ -161,7 +161,8 @@ func (fs *fileSystemOperationsImpl) verifyStackIntegrity(ctx context.Context, st
 	}
 }
 
-// checkStackIntegrity is a silent version of verifyStackIntegrity, used for getting files statuses
+// checkStackIntegrity is the read-only counterpart of verifyStackIntegrity; it does not report
+// the provider examples verifyStackIntegrity restores for pentagi.
 func (fs *fileSystemOperationsImpl) checkStackIntegrity(ctx context.Context, stack ProductStack) (FilesCheckResult, error) {
 	result := make(FilesCheckResult)
 

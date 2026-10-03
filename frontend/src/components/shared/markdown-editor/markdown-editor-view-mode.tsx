@@ -2,7 +2,7 @@ import { SquareMenu, Type } from 'lucide-react';
 
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-// 'rich' reflows whitespace on save (tiptap); 'raw' is a byte-exact textarea over the source.
+// 'rich' (tiptap) saves what it parsed, which can differ from the source; 'raw' is a byte-exact textarea over it.
 export type EditorViewMode = 'raw' | 'rich';
 
 interface EditorViewModeToggleProps {

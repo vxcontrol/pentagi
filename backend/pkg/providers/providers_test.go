@@ -535,7 +535,7 @@ func TestProviders_StoresEveryConfigTheProjectShips(t *testing.T) {
 		switch {
 		case strings.HasPrefix(name, "ollama-"):
 			ptype, env = provider.ProviderOllama, &config.Config{OllamaServerConfig: path}
-		case strings.HasPrefix(name, "bedrock-"):
+		case strings.HasPrefix(name, "bedrock"):
 			ptype, env = provider.ProviderBedrock, &config.Config{BedrockConfig: path}
 		}
 		shipped = append(shipped, shippedConfig{"the example " + name, ptype, env})

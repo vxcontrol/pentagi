@@ -427,8 +427,8 @@ func (h *defaultCheckHandler) GatherPentagiInfo(ctx context.Context, c *CheckRes
 	// would count as not extracted, and extraction overwrites the examples the user
 	// edited when the update is forced. Verification of an extracted stack writes it.
 	c.PentagiExtracted = checkFileExists(dockerComposeFile) &&
-		checkFileExists(ExampleCustomConfigLLMFile) &&
-		checkFileExists(ExampleOllamaConfigLLMFile)
+		checkFileExists(filepath.Join(envDir, ExampleCustomConfigLLMFile)) &&
+		checkFileExists(filepath.Join(envDir, ExampleOllamaConfigLLMFile))
 	c.PentagiScriptInstalled = checkFileExists(PentagiScriptFile)
 
 	if h.dockerClient != nil {

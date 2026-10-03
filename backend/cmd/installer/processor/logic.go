@@ -339,9 +339,10 @@ func (p *processor) applyPentagiChanges(ctx context.Context, state *operationSta
 	return nil
 }
 
-// checkFiles computes file statuses for a given stack, honoring the same
-// rules as verifyStackIntegrity: active stacks only and excluded files policy.
-// It serves as a dry-run for file operations without performing any writes.
+// checkFiles computes file statuses for a given stack under the rules the apply
+// path follows: embedded stacks only, and the excluded files policy of
+// verifyStackIntegrity. It writes nothing; the provider examples
+// verifyStackIntegrity restores for pentagi are not reported.
 func (p *processor) checkFiles(
 	ctx context.Context, stack ProductStack, state *operationState,
 ) (result map[string]files.FileStatus, err error) {

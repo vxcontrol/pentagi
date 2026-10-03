@@ -124,7 +124,6 @@ describe('MarkdownPaste — the parsed payload matches load (same tuned markdown
         expect(out).toBe(saved);
     });
 
-    // A rich clipboard is left to ProseMirror, whose link rule ends a URL inside the action it runs into.
     // jsdom has neither ClipboardEvent nor DataTransfer, which the paste rules build for their handlers.
     it.each([
         ['a URL that runs into an action', 'https://e.x/{{.P}}'],

@@ -173,9 +173,7 @@ describe('KnowledgeForm — update', () => {
 
     it('resets untouched fields to the server document returned by onSubmit', async () => {
         const user = userEvent.setup();
-        // The server's document carries another `content` (a field the user never edits here). The form's
-        // resetOptions keep DIRTY fields at their typed value, so asserting the reset
-        // applied the server document means asserting on an untouched field.
+        // The server's document carries another `content`, a field this test never edits.
         const serverDocument = {
             answerType: KnowledgeAnswerType.Other,
             codeLang: null,

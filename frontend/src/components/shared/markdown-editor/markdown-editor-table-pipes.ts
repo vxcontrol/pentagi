@@ -278,8 +278,8 @@ export const escapeTablePipes = (markdown: string, escaped = '\\|'): string => {
             const run = lines.slice(index, end);
 
             // The run is the item's, with or without a table in it: walked line by line here, a fence the
-            // item opens on its marker line would be closed by this scan where the item closes it, and
-            // every table below would go unprotected.
+            // item opens on its marker line is not seen, the line that closes it opens one in this scan,
+            // and every table below would go unprotected.
             if (end > index + 1) {
                 if (run.some((row) => row.includes('|'))) {
                     const inside = escapeTablePipes(

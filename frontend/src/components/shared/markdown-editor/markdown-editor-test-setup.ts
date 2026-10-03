@@ -57,6 +57,21 @@ export const structuralCounts = (markdown: string): Record<string, number> => {
     return counts;
 };
 
+// The text of every table cell the editor reads, header cells included, in document order.
+export const cellsOf = (markdown: string): string[] => {
+    const editor = new Editor({ content: markdown, contentType: 'markdown', extensions: createMarkdownExtensions() });
+    const cells: string[] = [];
+
+    editor.state.doc.descendants((node) => {
+        if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+            cells.push(node.textContent);
+        }
+    });
+    editor.destroy();
+
+    return cells;
+};
+
 // The two halves of a round trip, apart, for a test that measures how the cost of one grows.
 export const markdownCodec = (): {
     destroy: () => void;

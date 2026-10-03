@@ -317,8 +317,8 @@ func (m *LLMProviderFormModel) createConfigPathField(config *controller.LLMProvi
 	if config.HostConfigPath.Default == "" {
 		input.Placeholder = controller.LLMConfigMountPath(string(m.providerID))
 	}
-	// the path shown may come from the container variable while the host one is not in
-	// the env file at all, and an input takes its value only from a variable that is
+	// the path shown may come from the container variable while the host one is neither in
+	// the env file nor changed, and NewTextInput leaves the input of such a variable empty
 	input.SetValue(config.HostConfigPath.Value)
 
 	return FormField{

@@ -183,8 +183,7 @@ describe('multi-line blocks (hardBreak / Shift+Enter) stay body text', () => {
         expect(heading).toBe(0);
     });
 
-    // A heading is single-line; promoting `# a`⏎`# b` would emit `# a  \n# b`, which re-parses as TWO headings on
-    // reload. A block that contains a hardBreak stays a paragraph and round-trips as escaped body text instead.
+    // A block that holds a line break stays a paragraph and round-trips as escaped body text.
     it('a multi-line block whose FIRST line starts with "# " is NOT promoted (would be a lossy heading)', () => {
         const { heading, md, reloadHeading } = promote(doc(para(t('z# A'), hb, t('# B'))), 'z# A');
 

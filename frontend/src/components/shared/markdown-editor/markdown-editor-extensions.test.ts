@@ -589,8 +589,7 @@ describe('typing matches load — underscore emphasis literal, a bare URL is a l
         expect(md).toContain('[https://evil.example.com/x](https://evil.example.com/x)');
     });
 
-    // Typed at the end of a loaded document, where an action is literal text and holds its own delimiters. A
-    // mark writes its delimiters back, so the bytes alone would not show one that took in half an action.
+    // A mark writes its delimiters back, so the bytes alone would not show one that took in half an action.
     it.each([
         ['a backtick after a raw string', 'x {{ printf `%s` .A }} y', ' `z`', 'x {{ printf `%s` .A }} y `z`', ['code']],
         ['an asterisk after a comment', '{{/* a */}} b', ' c*', '{{/* a */}} b c*', []],
@@ -663,7 +662,7 @@ describe('typing matches load — underscore emphasis literal, a bare URL is a l
     });
 });
 
-describe('line-leading # / > in a paragraph stay body text on round-trip (ENCODER-LEADING)', () => {
+describe('line-leading # / > in a paragraph stay body text on round-trip', () => {
     const paraDoc = (...content: unknown[]) => ({ content: [{ content, type: 'paragraph' }], type: 'doc' });
 
     const save = (doc: unknown) => {
@@ -1005,8 +1004,6 @@ describe('a heading that holds a line break', () => {
     const hard = (marker?: string) => ({ attrs: { marker }, type: 'hardBreak' });
     const soft = hard('');
 
-    // Setext has two levels only; below them the ATX form is all there is, and it is one line. Setext cannot
-    // hold a break at either end of the heading, or one above a line that reads as a block of its own.
     it.each([
         ['between two lines at level 1', 1, [text('a'), hard(), text('b')], 'a  \nb\n==='],
         ['between two lines at level 2', 2, [text('a'), hard(), text('b')], 'a  \nb\n---'],
@@ -1663,9 +1660,6 @@ describe('line-leading block markers are escaped to marked grammar, inline backs
         expect(roundTrip('####### seven')).toBe('####### seven');
     });
 
-    // The load side used to unescape `\#`/`\>` at ANY inline position while the serializer only re-escaped them
-    // line-leading, so a backslash in the middle of a line was eaten. `\<root\>` is a GNU-grep word boundary;
-    // dropping the second backslash changes what the command matches.
     it.each([
         'use \\# for comments and \\> for redirect',
         "grep '\\<root\\>' /etc/passwd",
@@ -1784,7 +1778,6 @@ describe('brackets in a link label or an image alt do not break the node on relo
         expect(reload(first.markdown).markdown).toBe(first.markdown);
     });
 
-    // An unbalanced bracket in alt broke `![alt](src)` outright: the reload parsed ZERO image nodes.
     it('leaves the brackets of a Go action in an image alt to the template', () => {
         const md = '![{{ index .M "[k]" }} of [x]](http://x.test/i.png)';
         const saved = roundTrip(md);
@@ -1803,10 +1796,6 @@ describe('brackets in a link label or an image alt do not break the node on relo
 });
 
 describe('a URL inserted as its own link label settles instead of growing', () => {
-    // The Link popover inserts the URL as the visible text when there is no selection. A `]` in that text
-    // closed the markdown label early — `[https://example.com/a]b](…)` — and the serialized form grew on
-    // every load+save cycle (measured 50 → 103 → 156 → 260). The form keeps brackets out of the label; this
-    // pins the property that matters, that the document converges.
     it.each(['https://example.com/a]b', 'http://[::1]:8080/x', 'https://example.com/plain'])(
         'inserting %s converges',
         (url) => {
@@ -1844,8 +1833,7 @@ describe('a heading applied over the whole document', () => {
         return out;
     };
 
-    // toggleHeading had no whole-document wrapper, so Ctrl+A + "Heading 2" converted every table cell paragraph
-    // to a heading; saved as `| ## h | ## i |`, it reloads as literal cell text and escalates on each save.
+    // The selection covers the table too, and a GFM table cell cannot hold a heading.
     it('leaves table cells alone', () => {
         const source = ['lead', '', '| h | i |', '| --- | --- |', '| x | y |'].join('\n');
         const out = apply(source, 2);

@@ -974,7 +974,7 @@ const TunedStarterKit = StarterKit.extend({
 // ({{vars}} / <tags>) that don't affect serialization.
 //   • underline: false — its `++text++` markdown corrupts `C++ … C++` prose on load and Ctrl+U emits `++`.
 //   • link autolink/linkOnPaste: true — a bare URL/email becomes a link on load, paste, AND typing, kept
-//     symmetric with the marked layer (which no longer neutralises autolink/url). Do NOT set false: it
+//     symmetric with the marked layer (which reads a web address or an e-mail as a link). Do NOT set false: it
 //     diverges typing from load and re-freezes bare URLs as text.
 //   • link openOnClick: false — a click seats the caret in the link instead of navigating away, so LinkHandle
 //     (markdown-editor-link-handle.tsx) can show the edit popover; opening still works via that popover's button.

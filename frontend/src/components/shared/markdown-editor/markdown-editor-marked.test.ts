@@ -202,8 +202,6 @@ describe('a Go template action is literal text', () => {
 });
 
 describe('a pipe inside a code span of a table cell', () => {
-    // The loader reads a pipe inside a code span as content whether it is escaped or not, so a row is saved
-    // as the line it was; one that has been edited, or was made in the editor, is written the way GFM asks.
     it.each([
         ['written escaped', '| a | b |\n| --- | --- |\n| `x \\| y` | z |'],
         ['written bare', '| a | b |\n| --- | --- |\n| `x | y` | z |'],
@@ -299,8 +297,6 @@ describe('a pipe inside a code span of a table cell', () => {
 });
 
 describe('a line under a table that is not a row of it', () => {
-    // marked takes any line under a table for a row, pads it into cells and drops what is past the header's
-    // count. The table ends above such a line and the line is the text it was written as.
     it.each([
         [
             "a template's range around the rows",

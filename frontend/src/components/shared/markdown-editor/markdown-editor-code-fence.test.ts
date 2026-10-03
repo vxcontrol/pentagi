@@ -124,8 +124,7 @@ describe('code-block highlighting', () => {
     });
 });
 
-// Guards the two paired seams of the code-span fix: serializeCodeSpan (markdown-editor-marked.ts) and the
-// code-mark renderMarkdown override that zeroes the placeholder fence. A regression in either turns these red.
+// Pins serializeCodeSpan (markdown-editor-marked.ts) and the code-mark renderMarkdown override that zeroes the fence.
 describe('inline code containing a backtick round-trips exactly', () => {
     it('preserves and converges a backtick-containing code span', () => {
         const out = roundTrip('x ``a `b` c`` y');

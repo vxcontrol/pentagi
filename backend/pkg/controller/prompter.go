@@ -30,11 +30,9 @@ func newUserPrompter(ctx context.Context, db database.Querier, userID int64) (te
 	return buildUserPrompter(defaults, userPrompts), nil
 }
 
-// buildUserPrompter is the pure merge step extracted from newUserPrompter so
-// it can be unit-tested without a database fake or filesystem access. It
-// mutates the supplied defaults map by overlaying each non-empty user
-// override that still validates, then returns a Prompter backed by that map.
-// Callers must pass a fresh map (e.g., from templates.LoadDefaultPromptsMap)
+// buildUserPrompter overlays each non-empty user override that still validates
+// onto defaults and returns a Prompter backed by that map. It mutates defaults:
+// callers must pass a fresh map (e.g., from templates.LoadDefaultPromptsMap)
 // so the embedded defaults are not modified.
 func buildUserPrompter(defaults templates.PromptsMap, userPrompts []database.Prompt) templates.Prompter {
 	for _, p := range userPrompts {
@@ -47,10 +45,10 @@ func buildUserPrompter(defaults templates.PromptsMap, userPrompts []database.Pro
 			continue
 		}
 
-		// Validation runs only on save, so an override written before a variable
-		// was removed still loads, and text/template renders the missing key as
-		// "<no value>" without an error — the agent would be pointed at a tool
-		// that does not exist.
+		// Saving validates against the variables declared at that time, so a stored
+		// override can name one that was removed since; text/template would render
+		// the missing key as "<no value>" without an error and point the agent at a
+		// tool that does not exist.
 		promptType := templates.PromptType(p.Type)
 		if err := validator.ValidatePrompt(promptType, p.Prompt); err != nil {
 			logrus.WithError(err).WithField("prompt_type", p.Type).

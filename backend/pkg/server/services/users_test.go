@@ -476,6 +476,7 @@ func TestUsers_ChangePassword_ThroughTheEditorTakesUsersEdit(t *testing.T) {
 		rec := h.changeThroughTheEditor(t)
 
 		assert.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
+		assert.Contains(t, rec.Body.String(), "NotPermitted", "the permission gate refuses, not the session check")
 		afterGeneration, afterPassword := h.state(t)
 		assert.Equal(t, beforeGeneration, afterGeneration)
 		assert.Equal(t, beforePassword, afterPassword)
