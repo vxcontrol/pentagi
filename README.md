@@ -3369,7 +3369,7 @@ docker run --rm \
 
 #### Using Pre-configured Providers
 
-The Docker image comes with built-in support for major providers (OpenAI, Anthropic, Gemini, Ollama) and pre-configured provider files for additional services (OpenRouter, OpenCode, Atlas, OrcaRouter, DeepInfra, DeepSeek, Moonshot, Novita, xAI):
+The Docker image comes with built-in support for major providers (OpenAI, Anthropic, Gemini, Ollama) and pre-configured provider files for additional services (OpenRouter, OpenCode, Atlas, OrcaRouter, Cheaper Inference, DeepInfra, DeepSeek, Moonshot, Novita, xAI):
 
 ```bash
 # Test with OpenRouter configuration
@@ -3377,6 +3377,9 @@ docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/openr
 
 # Test with OpenCode Go plan configuration
 docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/opencode.provider.yml
+
+# Test with Cheaper Inference configuration
+docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/cheaperinference.provider.yml
 
 # Test with DeepInfra configuration
 docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/deepinfra.provider.yml
@@ -3436,10 +3439,10 @@ docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/ollam
 To use these configurations, your `.env` file only needs to contain:
 
 ```
-LLM_SERVER_URL=https://openrouter.ai/api/v1      # or https://api.deepinfra.com/v1/openai or https://api.openai.com/v1 or https://opencode.ai/zen/go/v1 or https://api.novita.ai/openai or https://api.atlascloud.ai/v1 or https://api.orcarouter.ai/v1 or https://api.x.ai/v1
+LLM_SERVER_URL=https://openrouter.ai/api/v1      # or https://api.deepinfra.com/v1/openai or https://api.openai.com/v1 or https://opencode.ai/zen/go/v1 or https://api.novita.ai/openai or https://api.atlascloud.ai/v1 or https://api.orcarouter.ai/v1 or https://api.cheaperinference.com/v1 or https://api.x.ai/v1
 LLM_SERVER_KEY=your_api_key
 LLM_SERVER_MODEL=                                # Leave empty, as models are specified in the config
-LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.ymll or opencode.provider.ymll or custom-openai.provider.yml or novita.provider.yml or atlas.provider.yml or orcarouter.provider.yml or xai.provider.yml
+LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.ymll or opencode.provider.ymll or custom-openai.provider.yml or novita.provider.yml or atlas.provider.yml or orcarouter.provider.yml or cheaperinference.provider.yml or xai.provider.yml
 LLM_SERVER_PROVIDER=                             # Provider name for LiteLLM proxy (e.g., openrouter, deepseek, moonshot, novita, opencode, orcarouter, xai)
 LLM_SERVER_PRESERVE_REASONING=false              # Preserve reasoning content in multi-turn conversations (required by Moonshot, default: false)
 
