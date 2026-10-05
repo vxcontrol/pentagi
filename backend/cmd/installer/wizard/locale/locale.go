@@ -1755,6 +1755,8 @@ Get API keys from:
 	ToolsSearchEnginesGoogleCXDesc             = "Google Custom Search Engine ID"
 	ToolsSearchEnginesGoogleLR                 = "Google Language Restriction"
 	ToolsSearchEnginesGoogleLRDesc             = "Google Search Engine language restriction (e.g., lang_en, lang_cn, etc.)"
+	ToolsSearchEnginesGoogleCSEURL             = "Google Custom Search URL"
+	ToolsSearchEnginesGoogleCSEURLDesc         = "Custom Search JSON API base URL (leave empty for Google; set for a compatible endpoint)"
 	ToolsSearchEnginesSearxngURL               = "Searxng Search URL"
 	ToolsSearchEnginesSearxngURLDesc           = "Searxng search engine URL"
 	ToolsSearchEnginesSearxngCategories        = "Searxng Search Categories"
@@ -2647,6 +2649,7 @@ const (
 	EnvDesc_GOOGLE_API_KEY        = "Google Search API Key"
 	EnvDesc_GOOGLE_CX_KEY         = "Google Search CX Key"
 	EnvDesc_GOOGLE_LR_KEY         = "Google Search LR Key"
+	EnvDesc_GOOGLE_CSE_URL        = "Google Custom Search URL"
 
 	EnvDesc_DOCKER_INSIDE                    = "Docker Inside Container"
 	EnvDesc_DOCKER_NET_ADMIN                 = "Docker Network Admin"

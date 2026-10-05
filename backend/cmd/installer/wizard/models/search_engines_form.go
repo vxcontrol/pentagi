@@ -163,6 +163,14 @@ func (m *SearchEnginesFormModel) BuildForm() tea.Cmd {
 		config.GoogleLRKey,
 	))
 
+	// Google Custom Search URL (optional, for Custom Search JSON API-compatible endpoints)
+	fields = append(fields, m.createTextField("google_cse_url",
+		locale.ToolsSearchEnginesGoogleCSEURL,
+		locale.ToolsSearchEnginesGoogleCSEURLDesc,
+		config.GoogleCSEURL,
+		false,
+	))
+
 	// Searxng URL
 	fields = append(fields, m.createTextField("searxng_url",
 		locale.ToolsSearchEnginesSearxngURL,
@@ -515,6 +523,7 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 		GoogleAPIKey:                  config.GoogleAPIKey,
 		GoogleCXKey:                   config.GoogleCXKey,
 		GoogleLRKey:                   config.GoogleLRKey,
+		GoogleCSEURL:                  config.GoogleCSEURL,
 		SearxngURL:                    config.SearxngURL,
 		SearxngCategories:             config.SearxngCategories,
 		SearxngLanguage:               config.SearxngLanguage,
@@ -576,6 +585,8 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 			newConfig.GoogleCXKey.Value = value
 		case "google_lr_key":
 			newConfig.GoogleLRKey.Value = value
+		case "google_cse_url":
+			newConfig.GoogleCSEURL.Value = value
 		case "searxng_url":
 			newConfig.SearxngURL.Value = value
 		case "searxng_categories":
