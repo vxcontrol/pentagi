@@ -13,8 +13,12 @@ import (
 
 // Constants for common operations in chainAST
 const (
-	fallbackRequestArgs     = `{}`
-	FallbackResponseContent = "the call was not handled, please try again"
+	fallbackRequestArgs = `{}`
+	// FallbackResponseContent fills an orphaned tool call (interrupted, timed out,
+	// or the container stopped). A small model follows this text literally, so it
+	// warns that the call may have partially run and tells the model to verify
+	// before retrying rather than blindly re-issuing a command.
+	FallbackResponseContent = "the tool call was not completed (interrupted, timed out, or the container stopped) and may have partially executed; do not simply retry — first verify the current state with a read-only command, then decide"
 	SummarizationToolName   = "execute_task_and_return_summary"
 	SummarizationToolArgs   = `{"question": "delegate and execute the task, then return the summary of the result"}`
 	ToolCallIDTemplate      = "call_{r:24:x}"

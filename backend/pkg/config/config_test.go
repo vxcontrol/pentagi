@@ -161,6 +161,9 @@ func clearConfigEnv(t *testing.T) {
 		"ASSISTANT_SUMMARIZER_LAST_SEC_BYTES", "ASSISTANT_SUMMARIZER_MAX_BP_BYTES",
 		"ASSISTANT_SUMMARIZER_MAX_QA_SECTIONS", "ASSISTANT_SUMMARIZER_MAX_QA_BYTES",
 		"ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS",
+		"SMALL_MODEL_MODE", "SMALL_MODEL_CTX_WINDOW", "SMALL_MODEL_CTX_BUDGET_PERCENT",
+		"SMALL_MODEL_BYTES_PER_TOKEN", "SMALL_MODEL_TOOL_OUTPUT_MAX_BYTES",
+		"SMALL_MODEL_VERIFIER_ENABLED", "SMALL_MODEL_SCOPE", "SMALL_MODEL_DENIED_COMMANDS",
 		"PROXY_URL", "EXTERNAL_SSL_CA_PATH", "EXTERNAL_SSL_INSECURE", "HTTP_CLIENT_TIMEOUT",
 		"OTEL_HOST", "LANGFUSE_BASE_URL", "LANGFUSE_PROJECT_ID", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY",
 		"GRAPHITI_ENABLED", "GRAPHITI_TIMEOUT", "GRAPHITI_URL",
@@ -219,6 +222,15 @@ func TestConfig_NewConfig_FillsDefaultsForAnEmptyEnvironment(t *testing.T) {
 	assert.Equal(t, 10, config.SummarizerMaxQASections)
 	assert.Equal(t, 65536, config.SummarizerMaxQABytes)
 	assert.Equal(t, 1, config.SummarizerKeepQASections)
+
+	assert.Equal(t, false, config.SmallModelMode)
+	assert.Equal(t, 32768, config.SmallModelCtxWindow)
+	assert.Equal(t, 40, config.SmallModelCtxBudgetPercent)
+	assert.Equal(t, 3, config.SmallModelBytesPerToken)
+	assert.Equal(t, 6144, config.SmallModelToolOutputMaxBytes)
+	assert.Equal(t, true, config.SmallModelVerifierEnabled)
+	assert.Empty(t, config.SmallModelScope)
+	assert.Empty(t, config.SmallModelDeniedCommands)
 
 	assert.Equal(t, true, config.DuckDuckGoEnabled)
 	assert.Equal(t, "sonar", config.PerplexityModel, "chat/completions names its models bare, so an unset value defaults to the Sonar model")
@@ -449,4 +461,31 @@ func TestConfig_EveryVariableReachesTheContainer(t *testing.T) {
 			)
 		}
 	}
+}
+
+func TestConfig_NewConfig_SmallModelModeLowersUnsetSummarizerThresholds(t *testing.T) {
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
+	t.Setenv("SMALL_MODEL_MODE", "true")
+
+	config, err := NewConfig()
+	require.NoError(t, err)
+
+	assert.Equal(t, 22*1024, config.SummarizerLastSecBytes)
+	assert.Equal(t, 7*1024, config.SummarizerMaxBPBytes)
+	assert.Equal(t, 4, config.SummarizerMaxQASections)
+	assert.Equal(t, 22*1024, config.SummarizerMaxQABytes)
+}
+
+func TestConfig_NewConfig_SmallModelModeKeepsExplicitSummarizerThresholds(t *testing.T) {
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
+	t.Setenv("SMALL_MODEL_MODE", "true")
+	t.Setenv("SUMMARIZER_LAST_SEC_BYTES", "40000")
+
+	config, err := NewConfig()
+	require.NoError(t, err)
+
+	assert.Equal(t, 40000, config.SummarizerLastSecBytes, "an explicit value must survive the small-model profile")
+	assert.Equal(t, 7*1024, config.SummarizerMaxBPBytes)
 }

@@ -21,6 +21,7 @@ import (
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/smallmodel"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
 
@@ -167,6 +168,9 @@ type flowProvider struct {
 	maxGACallsLimit int
 	maxLACallsLimit int
 	buildMonitor    executionMonitorBuilder
+
+	smVerifier *smallmodel.Verifier
+	smState    *smallmodel.Store
 
 	provider.Provider
 }

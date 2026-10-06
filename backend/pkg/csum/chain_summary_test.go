@@ -1875,7 +1875,7 @@ func TestChainSummary_SummarizeChain_RepairsADanglingToolCall(t *testing.T) {
 	require.Len(t, out, 3)
 	assert.Equal(t, chainSummaryJSON(t, in), chainSummaryJSON(t, out[:2]), "the question and the call are kept")
 	want := llms.MessageContent{Role: llms.ChatMessageTypeTool, Parts: []llms.ContentPart{llms.ToolCallResponse{
-		ToolCallID: "call_unanswered", Name: "terminal", Content: "the call was not handled, please try again",
+		ToolCallID: "call_unanswered", Name: "terminal", Content: "the tool call was not completed (interrupted, timed out, or the container stopped) and may have partially executed; do not simply retry — first verify the current state with a read-only command, then decide",
 	}}}
 	assert.Equal(t, want, out[2], "the unanswered tool call gains a fallback response")
 }

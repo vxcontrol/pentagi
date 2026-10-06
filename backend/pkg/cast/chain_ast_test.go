@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	chainASTFallback    = "the call was not handled, please try again"
+	chainASTFallback    = "the tool call was not completed (interrupted, timed out, or the container stopped) and may have partially executed; do not simply retry — first verify the current state with a read-only command, then decide"
 	chainASTAnthropicID = `^toolu_[0-9A-Za-z]{24}$`
 )
 

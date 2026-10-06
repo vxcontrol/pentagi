@@ -269,6 +269,29 @@ type Config struct {
 	AssistantSummarizerMaxQABytes     int  `env:"ASSISTANT_SUMMARIZER_MAX_QA_BYTES" envDefault:"76800"`
 	AssistantSummarizerKeepQASections int  `env:"ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS" envDefault:"3"`
 
+	// === Small Model Tuning ===
+	// SmallModelMode turns on a profile for small local models (e.g. served by
+	// Ollama): lower summarizer thresholds, a token budget enforced before each
+	// model call, always-on tool-call sanitization, informative repair of
+	// orphaned tool calls, and the pre-execution verifier. It is off by default;
+	// when off none of the fields below have any effect. When on, the
+	// SUMMARIZER_* thresholds that the operator has not set explicitly are
+	// lowered to small-model starting points by applySmallModelProfile.
+	SmallModelMode               bool   `env:"SMALL_MODEL_MODE" envDefault:"false"`
+	SmallModelCtxWindow          int    `env:"SMALL_MODEL_CTX_WINDOW" envDefault:"32768"`
+	SmallModelCtxBudgetPercent   int    `env:"SMALL_MODEL_CTX_BUDGET_PERCENT" envDefault:"40"`
+	SmallModelBytesPerToken      int    `env:"SMALL_MODEL_BYTES_PER_TOKEN" envDefault:"3"`
+	SmallModelToolOutputMaxBytes int    `env:"SMALL_MODEL_TOOL_OUTPUT_MAX_BYTES" envDefault:"6144"`
+	SmallModelVerifierEnabled    bool   `env:"SMALL_MODEL_VERIFIER_ENABLED" envDefault:"true"`
+	// SmallModelScope is a comma-separated allowlist of targets the agent may act
+	// against (IPs, CIDRs, or hostnames). Empty means no scope restriction is
+	// enforced by the verifier.
+	SmallModelScope string `env:"SMALL_MODEL_SCOPE" envDefault:""`
+	// SmallModelDeniedCommands is a comma-separated list of substrings that mark a
+	// shell command as destructive and requiring confirmation; empty uses the
+	// verifier's built-in list.
+	SmallModelDeniedCommands string `env:"SMALL_MODEL_DENIED_COMMANDS" envDefault:""`
+
 	// === Network Proxy Settings ===
 	ProxyURL string `env:"PROXY_URL"`
 
@@ -360,10 +383,32 @@ func NewConfig() (*Config, error) {
 		return nil, err
 	}
 
+	applySmallModelProfile(&config)
+
 	ensureInstallationID(&config)
 	ensureLicenseKey(&config)
 
 	return &config, nil
+}
+
+// applySmallModelProfile lowers the main summarizer thresholds to small-model
+// starting points when SMALL_MODEL_MODE is on, but only for the knobs the
+// operator has left unset, so an explicit SUMMARIZER_* value always wins.
+func applySmallModelProfile(config *Config) {
+	if !config.SmallModelMode {
+		return
+	}
+
+	lowerIfUnset := func(envName string, field *int, small int) {
+		if _, set := os.LookupEnv(envName); !set {
+			*field = small
+		}
+	}
+
+	lowerIfUnset("SUMMARIZER_LAST_SEC_BYTES", &config.SummarizerLastSecBytes, 22*1024)
+	lowerIfUnset("SUMMARIZER_MAX_BP_BYTES", &config.SummarizerMaxBPBytes, 7*1024)
+	lowerIfUnset("SUMMARIZER_MAX_QA_SECTIONS", &config.SummarizerMaxQASections, 4)
+	lowerIfUnset("SUMMARIZER_MAX_QA_BYTES", &config.SummarizerMaxQABytes, 22*1024)
 }
 
 func ensureInstallationID(config *Config) {

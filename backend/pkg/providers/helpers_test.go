@@ -16,7 +16,7 @@ import (
 
 const (
 	// helpersFallback is what a tool call nobody answered is padded with.
-	helpersFallback = "the call was not handled, please try again"
+	helpersFallback = "the tool call was not completed (interrupted, timed out, or the container stopped) and may have partially executed; do not simply retry — first verify the current state with a read-only command, then decide"
 	helpersWeather  = "The weather in New York is sunny with a high of 75°F."
 	// helpersNotFound is the start of the executor's answer to a call of a tool that does not exist.
 	helpersNotFound = "function 'execute_task_and_return_summary' not found in available tools list"

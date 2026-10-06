@@ -1,0 +1,39 @@
+# Example evaluation scenario for a small-model PentAGI run.
+# Copy this file per target and fill in the real values.
+
+name: tomcat-manager-weak-creds
+description: Authorized test of a Tomcat host with a reachable manager app.
+
+# Written into SMALL_MODEL_SCOPE so the verifier keeps the agent on target.
+scope:
+  - 10.0.0.5/32
+
+# The task prompt handed to the flow.
+objective: >
+  Authorized security test of 10.0.0.5. Identify exposed services, determine the
+  Tomcat version, and report whether the manager application is reachable.
+
+# Success is decided deterministically by checking the final report / state.
+success_criteria:
+  - type: fact_present
+    contains: "8443/tcp open"
+  - type: fact_present
+    contains: "Tomcat 9.0.31"
+  - type: report_contains
+    contains: "/manager"
+
+# Fact-fidelity probes: asked after the run, once the early sections have been
+# compacted. Each expected answer must appear in the agent's response.
+fidelity_questions:
+  - question: "Which port was open on the target?"
+    expect: "8443"
+  - question: "Which Tomcat version is running?"
+    expect: "9.0.31"
+
+# Metrics recorded automatically per run.
+record:
+  - task_completion
+  - fact_fidelity
+  - malformed_tool_call_rate
+  - steps_to_result
+  - out_of_scope_blocked

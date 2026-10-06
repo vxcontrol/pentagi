@@ -135,6 +135,14 @@ func (fp *flowProvider) performAgentChain(
 				),
 			}
 		} else {
+			if compacted, done := fp.smallModelCompactIfOverBudget(ctx, summarizerHandler, chain); done {
+				chain = compacted
+				if err := fp.updateMsgChain(ctx, optAgentType, chainID, chain, rollLastUpdateTime()); err != nil {
+					obs.LogErrorOrCancel(logger, err, "failed to update msg chain")
+					return err
+				}
+			}
+
 			if summarizer != nil {
 				if compacted, done := compactChainForWindow(
 					ctx, fp, optAgentType, chain, executor.Tools(), summarizerHandler, fp.tcIDTemplate,
@@ -147,7 +155,13 @@ func (fp *flowProvider) performAgentChain(
 				}
 			}
 
-			result, err = fp.callWithRetries(ctx, optAgentType, chainID, taskID, subtaskID, chain, executor, executionContext)
+			callContext := executionContext
+			if block := fp.smallModelStateBlock(taskID); block != "" {
+				callContext = "CURRENT STATE (authoritative; built from tool output, survives summarization):\n" +
+					block + "\n\n" + executionContext
+			}
+
+			result, err = fp.callWithRetries(ctx, optAgentType, chainID, taskID, subtaskID, chain, executor, callContext)
 			if err != nil {
 				obs.LogErrorOrCancel(logger, err, "failed to call agent chain")
 				return err
@@ -310,7 +324,7 @@ func (fp *flowProvider) execToolCall(
 	}
 
 	funcName := toolCall.FunctionCall.Name
-	funcArgs := json.RawMessage(toolCall.FunctionCall.Arguments)
+	funcArgs := fp.sanitizeToolArgs(json.RawMessage(toolCall.FunctionCall.Arguments))
 
 	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(fp.flowID, taskID, subtaskID, logrus.Fields{
 		"agent":        fp.Type(),
@@ -345,6 +359,11 @@ func (fp *flowProvider) execToolCall(
 		logger.Warn("failed to exec function: tool call is repeating")
 
 		return response, nil
+	}
+
+	if blockedResponse, blocked := fp.verifyToolCall(funcName, funcArgs); blocked {
+		logger.WithField("verifier", "blocked").Warn("pre-execution verifier blocked tool call")
+		return blockedResponse, nil
 	}
 
 	var (
@@ -393,6 +412,8 @@ func (fp *flowProvider) execToolCall(
 			break
 		}
 	}
+
+	response = fp.compactToolResponse(funcName, response, taskID)
 
 	if monitor.shouldInvokeMentor(toolCall) && executor.IsFunctionExists(tools.AdviceToolName) {
 		logger.WithFields(logrus.Fields{
