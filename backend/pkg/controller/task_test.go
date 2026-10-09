@@ -83,6 +83,28 @@ func (q *generatorFakeQuerier) GetTaskSubtasks(context.Context, int64) ([]databa
 	return q.subtasks, nil
 }
 
+func (q *generatorFakeQuerier) SaveSubtaskPlan(ctx context.Context, deleteIDs []int64, plan []database.CreateSubtaskParams) error {
+	before := append([]database.Subtask(nil), q.subtasks...)
+	removed := make(map[int64]bool, len(deleteIDs))
+	for _, id := range deleteIDs {
+		removed[id] = true
+	}
+	remaining := make([]database.Subtask, 0, len(q.subtasks))
+	for _, row := range q.subtasks {
+		if !removed[row.ID] {
+			remaining = append(remaining, row)
+		}
+	}
+	q.subtasks = remaining
+	for _, item := range plan {
+		if _, err := q.CreateSubtask(ctx, item); err != nil {
+			q.subtasks = before
+			return err
+		}
+	}
+	return nil
+}
+
 type generatorFakeMsgLog struct {
 	FlowMsgLogWorker
 
@@ -101,10 +123,11 @@ func (m generatorFakeMsgLog) PutTaskMsg(ctx context.Context, _ database.MsglogTy
 type generatorFakeProvider struct {
 	providers.FlowProvider
 
-	plan      []tools.SubtaskInfo
-	err       error
-	cancel    context.CancelFunc
-	refineErr error
+	plan       []tools.SubtaskInfo
+	err        error
+	cancel     context.CancelFunc
+	refineErr  error
+	refinePlan []tools.SubtaskInfo
 }
 
 func (generatorFakeProvider) GetTaskTitle(context.Context, string) (string, error) {
@@ -122,7 +145,7 @@ func (p generatorFakeProvider) GenerateSubtasks(ctx context.Context, _ int64) ([
 }
 
 func (p generatorFakeProvider) RefineSubtasks(context.Context, int64) ([]tools.SubtaskInfo, error) {
-	return nil, p.refineErr
+	return p.refinePlan, p.refineErr
 }
 
 func TestTask_AnExplicitlyEmptyGeneratorPlanRunsTheOriginalRequest(t *testing.T) {
@@ -273,7 +296,7 @@ func TestTask_NewTaskWorker_ClosesATaskThatCannotStart(t *testing.T) {
 		assert.Len(t, pub.taskUpdated, 1)
 	})
 
-	t.Run("a generator that stops part way publishes the subtasks it committed", func(t *testing.T) {
+	t.Run("a rejected generator plan publishes no partial subtasks", func(t *testing.T) {
 		q := &generatorFakeQuerier{subtaskLimit: 2}
 		flowCtx, pub := newContext(q, generatorFakeProvider{plan: []tools.SubtaskInfo{{Title: "a"}, {Title: "b"}, {Title: "c"}}})
 
@@ -281,7 +304,8 @@ func TestTask_NewTaskWorker_ClosesATaskThatCannotStart(t *testing.T) {
 
 		require.ErrorContains(t, err, "subtask row rejected")
 		require.Len(t, pub.taskSubtasks, 1)
-		assert.Len(t, pub.taskSubtasks[0], 2, "the client sees the subtasks the database holds")
+		assert.Empty(t, pub.taskSubtasks[0])
+		assert.Empty(t, q.subtasks)
 	})
 
 	t.Run("a generator stopped by its user closes the task without failing it", func(t *testing.T) {
@@ -297,6 +321,39 @@ func TestTask_NewTaskWorker_ClosesATaskThatCannotStart(t *testing.T) {
 			"a task left created never loads again, and stopping a flow is not a task failure")
 		assert.Len(t, pub.taskUpdated, 1)
 	})
+}
+
+func TestTask_RefinedPlanInvalidatesWorkersOnlyAfterCommit(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		name := "committed"
+		if fail {
+			name = "rejected"
+		}
+		t.Run(name, func(t *testing.T) {
+			original := []database.Subtask{{ID: 195, Status: database.SubtaskStatusFinished}, {ID: 196, Status: database.SubtaskStatusCreated}}
+			q := &generatorFakeQuerier{subtasks: original}
+			if fail {
+				q.subtaskLimit = 2
+			}
+			stc := NewSubtaskController(&TaskContext{TaskID: 9, FlowContext: FlowContext{DB: q, Provider: generatorFakeProvider{refinePlan: []tools.SubtaskInfo{{Title: "new first"}, {Title: "new second"}}}}}).(*subtaskController)
+			stc.subtasks[195] = nil
+			stc.subtasks[196] = nil
+			err := stc.RefineSubtasks(context.Background())
+			_, oldWorkerExists := stc.subtasks[196]
+			_, completedWorkerExists := stc.subtasks[195]
+			require.True(t, completedWorkerExists)
+			if fail {
+				require.Error(t, err)
+				assert.Equal(t, original, q.subtasks)
+				assert.True(t, oldWorkerExists)
+			} else {
+				require.NoError(t, err)
+				assert.False(t, oldWorkerExists)
+				require.Len(t, q.subtasks, 3)
+				assert.Equal(t, original[0], q.subtasks[0])
+			}
+		})
+	}
 }
 
 func TestTask_Report_RefusesACompletedTaskWithASentinel(t *testing.T) {
