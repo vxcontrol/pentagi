@@ -92,7 +92,7 @@ Run the base `docker-compose.yml` first so the shared Docker networks exist, the
 3. Re-run `ctester` and `etester` if you changed any provider settings. For deeper checks of individual agent functions and tools, use `ftester` (see [Function Testing with ftester](https://github.com/vxcontrol/pentagi#function-testing-with-ftester)).
 4. Open `https://localhost:8443` (or your `PUBLIC_URL`) and sign in with the default `admin@pentagi.com` / `admin`, then change the password immediately.
 
-After the server is running, several areas are managed in the web console under Settings (Providers, Prompts, PentAGI API tokens), while LLM and search credentials, Langfuse, Graphiti, and MCP remain server-side configuration. See [Current Web Settings Coverage](https://github.com/vxcontrol/pentagi#current-web-settings-coverage) for the exact split.
+After the server is running, several areas are managed in the web console under Settings (Providers, Prompts, PentAGI API tokens), while LLM and search credentials, Langfuse and Graphiti remain server-side configuration. See [Current Web Settings Coverage](https://github.com/vxcontrol/pentagi#current-web-settings-coverage) for the exact split.
 
 ## First-run configuration checklist
 
