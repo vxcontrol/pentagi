@@ -12,6 +12,8 @@ PentAGI stores application state in PostgreSQL and uses the `vector` extension f
 
 SQL queries live in `backend/sqlc/models`. Schema history lives in `backend/migrations/sql`.
 
+Subtask generation, refinement and assistant plan patches use `database.SaveSubtaskPlan` in `pkg/database/subtask_plan.go`. Titles and descriptions pass through `SanitizeUTF8` before insertion: NUL bytes are removed, malformed UTF-8 is replaced, and valid text is preserved. Removal of the replaced subtasks and insertion of the entire new plan share one transaction. Any delete or insert failure rolls back the plan; in-memory subtask workers are invalidated only after commit. A failed or ambiguous commit is reported to the caller. This does not repair partial plans already stored by a previous execution.
+
 This document describes how the product uses the database. It is not a substitute for the schema itself. Sources of truth, in descending order:
 
 1. `backend/migrations/sql/*.sql` — schema and data migrations;
