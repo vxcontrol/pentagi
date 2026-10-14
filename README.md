@@ -1931,7 +1931,7 @@ PROXY_URL=http://your-proxy:8080
 
 #### Supported Models
 
-PentAGI lists 14 Gemini model IDs that responded through the tested API endpoint. Availability in the catalogue does not mean a model is suitable for every agent role: the saved-chain results below determine the bundled defaults. Models marked with `*` are used in `config.yml`; the [full replay matrix](MODEL_REPLAY_RESULTS.md) describes role and outcome limits.
+PentAGI lists 14 Gemini model IDs that responded through the tested API endpoint. Availability in the catalogue does not mean a model is suitable for every agent role: the saved-chain results below determine the bundled defaults. Models marked with `*` are used in `config.yml`; the saved-chain results below describe role and outcome limits.
 
 | Model ID | Thinking | Context | Price (Input/Output/Cache) | Saved-chain result |
 | --- | --- | --- | --- | --- |
@@ -2576,7 +2576,7 @@ EMBEDDING_STRIP_NEW_LINES=    # optional, default applies
 
 > Note: the Global/US DashScope endpoint (`dashscope-us.aliyuncs.com`) does **not** expose embedding APIs — use the International or China endpoints for `text-embedding-v4`.
 
-**As OpenAI-typed custom LLM provider**: instead of the dedicated `QWEN_*` variables, you can wire any Qwen chat model through PentAGI's custom OpenAI-compatible provider by pointing `OPENAI_SERVER_URL` (or a custom provider entry) to the DashScope `/compatible-mode/v1` endpoint and selecting the desired Qwen model name. Useful when you already manage all model traffic through a single OpenAI-shaped client (e.g. shared with LiteLLM/OneAPI proxies).
+**As OpenAI-typed custom LLM provider**: instead of the dedicated `QWEN_*` variables, you can wire any Qwen chat model through PentAGI's custom OpenAI-compatible provider by pointing `OPEN_AI_SERVER_URL` (or a custom provider entry) to the DashScope `/compatible-mode/v1` endpoint and selecting the desired Qwen model name. Useful when you already manage all model traffic through a single OpenAI-shaped client (e.g. shared with LiteLLM/OneAPI proxies).
 
 ### MiniMax Provider Configuration
 
@@ -2684,7 +2684,7 @@ XAI_PROVIDER=xai  # Adds prefix to model names (xai/grok-4.3) for LiteLLM
 
 #### Supported Models
 
-PentAGI lists seven xAI Chat Completions model IDs that responded through the tested API. Catalogue availability does not imply suitability as an agent default. The bundled configuration uses `grok-4.3` for tool-heavy roles, including `searcher`, and `grok-4.20-0309-non-reasoning` for `simple`, `simple_json`, `reflector`, and `enricher`; the exact bindings are in `backend/pkg/providers/xai/config.yml`. In saved generator chains, `grok-4.3` called `subtask_list` directly on all nine, whereas `grok-4.6` returned text without a tool call on all nine. The [full replay matrix](MODEL_REPLAY_RESULTS.md) records outcomes and limitations. The Responses-only multi-agent model is not listed because PentAGI agents supply their own client-side tools.
+PentAGI lists seven xAI Chat Completions model IDs that responded through the tested API. Catalogue availability does not imply suitability as an agent default. The bundled configuration uses `grok-4.3` for tool-heavy roles, including `searcher`, and `grok-4.20-0309-non-reasoning` for `simple`, `simple_json`, `reflector`, and `enricher`; the exact bindings are in `backend/pkg/providers/xai/config.yml`. In saved generator chains, `grok-4.3` called `subtask_list` directly on all nine, whereas `grok-4.6` returned text without a tool call on all nine. The saved-chain results below record outcomes and limitations. The Responses-only multi-agent model is not listed because PentAGI agents supply their own client-side tools.
 
 | Model ID | Context | Price (Input/Output) | Reasons | Saved-chain result |
 | --- | --- | --- | --- | --- |
