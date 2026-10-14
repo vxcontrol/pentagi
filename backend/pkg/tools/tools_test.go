@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"go/ast"
@@ -250,6 +251,27 @@ func toolsWriteFlowFiles(t *testing.T, dataDir string) {
 }
 
 // One exec lists what is missing, one archive carries only that, and a symlink never leaves the host.
+// toolsExecFrames encodes text the way the daemon streams a non-TTY exec: one frame per line, on stderr when asked.
+func toolsExecFrames(text string, stderr bool) []byte {
+	stream := byte(1)
+	if stderr {
+		stream = 2
+	}
+
+	var out []byte
+	for _, line := range strings.SplitAfter(text, "\n") {
+		if line == "" {
+			continue
+		}
+		header := []byte{stream, 0, 0, 0, 0, 0, 0, 0}
+		binary.BigEndian.PutUint32(header[4:], uint32(len(line)))
+		out = append(out, header...)
+		out = append(out, line...)
+	}
+
+	return out
+}
+
 func TestTools_Prepare_SyncsTheFilesTheSandboxLacks(t *testing.T) {
 	errCreate := errors.New("container pentagi-terminal-42 is not running")
 	errAttach := errors.New("hijack: connection refused")
@@ -359,7 +381,7 @@ func TestTools_Prepare_SyncsTheFilesTheSandboxLacks(t *testing.T) {
 			docker := &fakeDockerClient{
 				isRunning:      true,
 				execCreateResp: client.ExecCreateResult{ID: "file-check"},
-				attachOutput:   []byte(tc.output),
+				attachOutput:   toolsExecFrames(tc.output, tc.exitCode != 0),
 				inspectResp:    client.ExecInspectResult{ExitCode: tc.exitCode},
 				execCreateErr:  tc.createErr,
 				attachErr:      tc.attachErr,

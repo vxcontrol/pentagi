@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -25,6 +26,7 @@ import (
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/schema"
 
+	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/client"
 	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/cloud/anonymizer"
@@ -660,7 +662,9 @@ func (fte *flowToolsExecutor) findMissingInContainer(ctx context.Context, entrie
 	if err != nil {
 		return nil, fmt.Errorf("failed to attach file-check exec: %w", err)
 	}
-	output, readErr := io.ReadAll(resp.Reader)
+	// Without a TTY the daemon multiplexes stdout and stderr into 8-byte-header frames.
+	var output bytes.Buffer
+	_, readErr := stdcopy.StdCopy(&output, &output, resp.Reader)
 	resp.Close()
 	if readErr != nil {
 		return nil, fmt.Errorf("failed to read file-check output: %w", readErr)
@@ -670,7 +674,7 @@ func (fte *flowToolsExecutor) findMissingInContainer(ctx context.Context, entrie
 		return nil, fmt.Errorf("failed to inspect file-check exec: %w", err)
 	}
 	if inspect.ExitCode != 0 {
-		return nil, fmt.Errorf("file-check exec failed with exit code %d: %s", inspect.ExitCode, strings.TrimSpace(string(output)))
+		return nil, fmt.Errorf("file-check exec failed with exit code %d: %s", inspect.ExitCode, strings.TrimSpace(output.String()))
 	}
 
 	byContainerPath := make(map[string]fileSyncEntry, len(entries))
@@ -679,7 +683,7 @@ func (fte *flowToolsExecutor) findMissingInContainer(ctx context.Context, entrie
 	}
 
 	var missing []fileSyncEntry
-	for _, line := range strings.Split(string(output), "\n") {
+	for _, line := range strings.Split(output.String(), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
