@@ -28,6 +28,8 @@ type Querier interface {
 	CreateAssistantLog(ctx context.Context, arg CreateAssistantLogParams) (Assistantlog, error)
 	CreateContainer(ctx context.Context, arg CreateContainerParams) (Container, error)
 	CreateFlow(ctx context.Context, arg CreateFlowParams) (Flow, error)
+	CreateFlowInputUpdate(ctx context.Context, arg CreateFlowInputUpdateParams) (FlowInputUpdate, error)
+	CreateTaskForFlowInputUpdate(ctx context.Context, arg CreateTaskForFlowInputUpdateParams) (CreateTaskForFlowInputUpdateRow, error)
 	CreateFlowTemplate(ctx context.Context, arg CreateFlowTemplateParams) (FlowTemplate, error)
 	CreateMsgChain(ctx context.Context, arg CreateMsgChainParams) (Msgchain, error)
 	CreateMsgLog(ctx context.Context, arg CreateMsgLogParams) (Msglog, error)
@@ -93,6 +95,8 @@ type Querier interface {
 	GetContainerTermLogs(ctx context.Context, containerID int64) ([]Termlog, error)
 	GetContainers(ctx context.Context) ([]Container, error)
 	GetFlow(ctx context.Context, id int64) (Flow, error)
+	GetFlowInputUpdateCounts(ctx context.Context, flowID int64) (GetFlowInputUpdateCountsRow, error)
+	ClaimNextFlowInputUpdate(ctx context.Context, flowID int64) (FlowInputUpdate, error)
 	GetFlowAgentLog(ctx context.Context, arg GetFlowAgentLogParams) (Agentlog, error)
 	GetFlowAgentLogs(ctx context.Context, flowID int64) ([]Agentlog, error)
 	GetFlowAssistant(ctx context.Context, arg GetFlowAssistantParams) (Assistant, error)
@@ -296,6 +300,9 @@ type Querier interface {
 	UpdateFlowLanguage(ctx context.Context, arg UpdateFlowLanguageParams) (Flow, error)
 	UpdateFlowProvider(ctx context.Context, arg UpdateFlowProviderParams) (Flow, error)
 	UpdateFlowStatus(ctx context.Context, arg UpdateFlowStatusParams) (Flow, error)
+	UpdateFlowInputUpdateStatus(ctx context.Context, arg UpdateFlowInputUpdateStatusParams) error
+	RecoverFlowInputUpdates(ctx context.Context, flowID int64) error
+	FailFlowInputUpdates(ctx context.Context, flowID int64) error
 	UpdateFlowTemplate(ctx context.Context, arg UpdateFlowTemplateParams) (FlowTemplate, error)
 	UpdateFlowTitle(ctx context.Context, arg UpdateFlowTitleParams) (Flow, error)
 	UpdateFlowToolCallIDTemplate(ctx context.Context, arg UpdateFlowToolCallIDTemplateParams) (Flow, error)

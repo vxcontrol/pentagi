@@ -80,6 +80,22 @@ func (tc *taskController) CreateTask(
 	return tw, nil
 }
 
+func (tc *taskController) CreateQueuedTask(
+	ctx context.Context,
+	input string,
+	updater FlowUpdater,
+	queueID int64,
+) (TaskWorker, error) {
+	tc.mx.Lock()
+	defer tc.mx.Unlock()
+	tw, err := NewFlowInputUpdateTaskWorker(ctx, tc.flowCtx, input, updater, queueID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create queued task worker: %w", err)
+	}
+	tc.tasks[tw.GetTaskID()] = tw
+	return tw, nil
+}
+
 func (tc *taskController) ListTasks(ctx context.Context) []TaskWorker {
 	tc.mx.Lock()
 	defer tc.mx.Unlock()

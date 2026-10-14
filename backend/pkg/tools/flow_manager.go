@@ -98,6 +98,10 @@ func (t *flowStatusTool) buildSummary(ctx context.Context, verbose bool) (string
 	if err != nil {
 		return "", fmt.Errorf("failed to get flow subtasks: %w", err)
 	}
+	queueCounts, err := t.db.GetFlowInputUpdateCounts(ctx, t.flowID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get queued flow input counts: %w", err)
+	}
 
 	taskCounts := map[string]int{"created": 0, "running": 0, "waiting": 0, "finished": 0, "failed": 0}
 	var activeTask *database.Task
@@ -124,6 +128,8 @@ func (t *flowStatusTool) buildSummary(ctx context.Context, verbose bool) (string
 		len(tasks), taskCounts["running"], taskCounts["waiting"], taskCounts["finished"], taskCounts["failed"], taskCounts["created"])
 	fmt.Fprintf(sb, "Subtasks — total: %d, running: %d, waiting: %d, finished: %d, failed: %d, planned: %d\n",
 		len(subtasks), stCounts["running"], stCounts["waiting"], stCounts["finished"], stCounts["failed"], stCounts["created"])
+	fmt.Fprintf(sb, "Assistant updates — queued: %d, processing: %d, failed: %d\n",
+		queueCounts.Queued, queueCounts.Processing, queueCounts.Failed)
 
 	if activeTask != nil {
 		fmt.Fprintf(sb, "\nActive task:    ID=%-6d | %-8s | %s\n", activeTask.ID, activeTask.Status, activeTask.Title)
@@ -679,18 +685,23 @@ type submitFlowInputTool struct {
 	flowID       int64
 	db           database.Querier
 	handler      func(ctx context.Context, input string) error
+	queueHandler func(ctx context.Context, input string) (int64, error)
 	pollInterval time.Duration
 	pollTimeout  time.Duration
 }
 
-func NewSubmitFlowInputTool(flowID int64, db database.Querier, handler func(ctx context.Context, input string) error) *submitFlowInputTool {
-	return &submitFlowInputTool{
+func NewSubmitFlowInputTool(flowID int64, db database.Querier, handler func(ctx context.Context, input string) error, queueHandler ...func(ctx context.Context, input string) (int64, error)) *submitFlowInputTool {
+	t := &submitFlowInputTool{
 		flowID:       flowID,
 		db:           db,
 		handler:      handler,
 		pollInterval: taskReadyPollInterval,
 		pollTimeout:  taskReadyPollTimeout,
 	}
+	if len(queueHandler) > 0 {
+		t.queueHandler = queueHandler[0]
+	}
+	return t
 }
 
 func (t *submitFlowInputTool) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
@@ -702,6 +713,9 @@ func (t *submitFlowInputTool) Handle(ctx context.Context, name string, args json
 	if action.Input == "" {
 		return "", fmt.Errorf("input must not be empty")
 	}
+	if len(action.Input) > inputLimit {
+		return "", fmt.Errorf("input exceeds the %d byte limit", inputLimit)
+	}
 
 	tasks, err := t.db.GetFlowTasks(ctx, t.flowID)
 	if err != nil {
@@ -710,6 +724,13 @@ func (t *submitFlowInputTool) Handle(ctx context.Context, name string, args json
 
 	for _, task := range tasks {
 		if task.Status == database.TaskStatusRunning {
+			if t.queueHandler != nil {
+				queueID, err := t.queueHandler(ctx, action.Input)
+				if err != nil {
+					return "", fmt.Errorf("failed to queue flow input: %w", err)
+				}
+				return fmt.Sprintf("Input queued as update %d. It will be delivered to the automation after the active task reaches a safe execution boundary. The queue is FIFO; only text instructions are supported.", queueID), nil
+			}
 			return fmt.Sprintf(
 				"Cannot submit input: task %q (ID: %d) is currently running. "+
 					"Call %s first to stop the current execution, then retry %s. "+

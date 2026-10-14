@@ -75,8 +75,10 @@ This document describes the internal architecture and execution workflow of Flow
 - **Flow Management Tools** - Assistant-only; available when FlowWorker is injected into AssistantProvider
   - `get_flow_status` - Query flow state, tasks, subtasks, planned/running subtask with optional agent messages (verbose mode: 50 messages, execution context)
   - `stop_flow` - Cancel the currently running task (15s timeout; reports actual post-stop state)
-  - `submit_flow_input` - Deliver text to a waiting flow: answers an `ask` checkpoint or creates a new task
+  - `submit_flow_input` - Deliver text to a waiting flow, answer an `ask` checkpoint, or durably queue a text-only update while a task is running
   - `patch_flow_subtasks` - Replace planned subtask list via delta operations (add/remove/modify/reorder); returns new IDs after recreation
+
+Assistant updates submitted during active automation are stored per flow in `flow_input_updates` and consumed in database-ID order after the active task reaches a worker boundary. Queue claiming and task creation link the update and its generated task in one database statement, so a restart can recover an update not yet dispatched without creating a second task for an update already linked to one. Queued updates contain text only; they do not attach files or resources. The `get_flow_status` summary reports queued, processing, and failed update counts.
 
 ### Execution Context
 - **Message Chain** - Conversation history maintained for each agent interaction
