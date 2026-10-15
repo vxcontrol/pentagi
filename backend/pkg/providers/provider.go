@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -330,17 +331,22 @@ func (fp *flowProvider) GetTaskTitle(ctx context.Context, input string) (string,
 		"Input":       input,
 		"Lang":        fp.language,
 		"CurrentTime": getCurrentTime(),
-		"N":           150,
+		"N":           taskTitleLimit,
 	})
 	if err != nil {
-		return "", wrapErrorEndEvaluatorSpan(ctx, getterEvaluator, "failed to get flow title template", err)
+		return "", wrapErrorEndEvaluatorSpan(ctx, getterEvaluator, "failed to get task title template", err)
 	}
 
+	// The title is cosmetic: a model that cannot produce one must not fail the task.
 	title, err := fp.Call(ctx, pconfig.OptionsTypeSimple, titleTmpl)
-	if err != nil {
-		return "", wrapErrorEndEvaluatorSpan(ctx, getterEvaluator, "failed to get flow title", err)
+	if err != nil && (ctx.Err() != nil || errors.Is(err, context.Canceled)) {
+		return "", wrapErrorEndEvaluatorSpan(ctx, getterEvaluator, "failed to get task title", err)
 	}
-	title = normalizeTitle(title)
+	if title = normalizeTitle(title); title == "" {
+		title = titleFromInput(input, taskTitleLimit, untitledTask)
+		logrus.WithContext(ctx).WithError(err).WithField("title", title).
+			Warn("failed to get task title, falling back to the task input")
+	}
 
 	getterEvaluator.End(
 		langfuse.WithEvaluatorStatus("success"),
