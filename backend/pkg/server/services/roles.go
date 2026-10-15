@@ -64,7 +64,7 @@ func (s *RoleService) GetRoles(c *gin.Context) {
 	privs := c.GetStringSlice("prm")
 	scope := func(db *gorm.DB) *gorm.DB {
 		if !slices.Contains(privs, "roles.view") {
-			return db.Where("role_id = ?", rid)
+			return db.Where("roles.id = ?", rid)
 		}
 		return db
 	}
@@ -133,7 +133,7 @@ func (s *RoleService) GetRole(c *gin.Context) {
 	privs := c.GetStringSlice("prm")
 	scope := func(db *gorm.DB) *gorm.DB {
 		if !slices.Contains(privs, "roles.view") {
-			return db.Where("role_id = ?", rid)
+			return db.Where("roles.id = ?", rid)
 		}
 		return db
 	}
