@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,6 +16,15 @@ import (
 const (
 	// defaultHTTPClientTimeout is the fallback timeout when no config is provided.
 	defaultHTTPClientTimeout = 10 * time.Minute
+)
+
+// Without them an unreachable host holds every attempt for the OS SYN timeout
+// (about two minutes on Linux). They bound connecting only: a slow model answer
+// is still limited by HTTPClientTimeout alone.
+var (
+	httpDialTimeout         = 30 * time.Second
+	httpDialKeepAlive       = 30 * time.Second
+	httpTLSHandshakeTimeout = 10 * time.Second
 )
 
 func getHostname() string {
@@ -73,6 +83,8 @@ func GetHTTPClient(cfg *config.Config) (*http.Client, error) {
 				Proxy: func(req *http.Request) (*url.URL, error) {
 					return url.Parse(cfg.ProxyURL)
 				},
+				DialContext:         newHTTPDialer().DialContext,
+				TLSHandshakeTimeout: httpTLSHandshakeTimeout,
 				TLSClientConfig: &tls.Config{
 					RootCAs:            rootCAPool,
 					InsecureSkipVerify: cfg.ExternalSSLInsecure,
@@ -83,6 +95,8 @@ func GetHTTPClient(cfg *config.Config) (*http.Client, error) {
 		httpClient = &http.Client{
 			Timeout: timeout,
 			Transport: &http.Transport{
+				DialContext:         newHTTPDialer().DialContext,
+				TLSHandshakeTimeout: httpTLSHandshakeTimeout,
 				TLSClientConfig: &tls.Config{
 					RootCAs:            rootCAPool,
 					InsecureSkipVerify: cfg.ExternalSSLInsecure,
@@ -92,4 +106,11 @@ func GetHTTPClient(cfg *config.Config) (*http.Client, error) {
 	}
 
 	return httpClient, nil
+}
+
+func newHTTPDialer() *net.Dialer {
+	return &net.Dialer{
+		Timeout:   httpDialTimeout,
+		KeepAlive: httpDialKeepAlive,
+	}
 }

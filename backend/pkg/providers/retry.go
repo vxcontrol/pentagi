@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/reasoning"
 )
@@ -80,9 +81,17 @@ func retryTransient[T any](ctx context.Context, delay time.Duration, call func()
 			return result, nil
 		case errors.Is(err, context.Canceled) || isDeterministicError(err):
 			return zero, err
-		case attempt == maxRetriesToCallSimpleChain:
+		}
+
+		logger := logrus.WithError(err).WithFields(logrus.Fields{
+			"attempt":      attempt,
+			"max_attempts": maxRetriesToCallSimpleChain,
+		})
+		if attempt == maxRetriesToCallSimpleChain {
+			logger.Warn("call failed, no attempts left")
 			return zero, fmt.Errorf("gave up after %d attempts: %w", attempt, err)
 		}
+		logger.Warn("call failed, will retry")
 
 		select {
 		case <-ctx.Done():
