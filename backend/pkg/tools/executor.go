@@ -483,18 +483,18 @@ func (ce *customExecutor) GetBarrierTools() []FunctionInfo {
 func (ce *customExecutor) GetToolSchema(name string) (*schema.Schema, error) {
 	for _, def := range ce.definitions {
 		if def.Name == name {
-			return ce.converToJSONSchema(def.Parameters)
+			return ce.convertToJSONSchema(def.Parameters)
 		}
 	}
 
 	if def, ok := registryDefinitions[name]; ok {
-		return ce.converToJSONSchema(def.Parameters)
+		return ce.convertToJSONSchema(def.Parameters)
 	}
 
 	return nil, fmt.Errorf("tool %s not found", name)
 }
 
-func (ce *customExecutor) converToJSONSchema(params any) (*schema.Schema, error) {
+func (ce *customExecutor) convertToJSONSchema(params any) (*schema.Schema, error) {
 	jsonSchema, err := json.Marshal(params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal parameters: %w", err)

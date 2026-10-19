@@ -81,7 +81,7 @@ func (a Assistant) Validate(db *gorm.DB) {
 	}
 }
 
-// CreateAssistant is model to contain assistant creation paylaod
+// CreateAssistant is model to contain assistant creation payload
 // nolint:lll
 type CreateAssistant struct {
 	Input       string           `form:"input" json:"input" validate:"required" example:"user input for running assistant"`
@@ -96,7 +96,7 @@ func (ca CreateAssistant) Valid() error {
 	return validate.Struct(ca)
 }
 
-// PatchAssistant is model to contain assistant patching paylaod
+// PatchAssistant is model to contain assistant patching payload
 // nolint:lll
 type PatchAssistant struct {
 	Action      string   `form:"action" json:"action" validate:"required,oneof=stop input" enums:"stop,input" default:"stop"`

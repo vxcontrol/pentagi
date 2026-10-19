@@ -273,7 +273,7 @@ func (t *tester) Execute(args []string) error {
 	}
 
 	// If flowID > 0 and the function requires terminal preparation, prepare it
-	if t.flowID > 0 && t.needsTeminalPrepare(funcName) {
+	if t.flowID > 0 && t.needsTerminalPrepare(funcName) {
 		terminal.PrintInfo("Preparing container for terminal operations...")
 		if err := t.flowExecutor.Prepare(t.ctx); err != nil {
 			return fmt.Errorf("failed to prepare executor: %w", err)
@@ -666,8 +666,8 @@ func (t *tester) showFunctionHelp(funcName string) error {
 	return nil
 }
 
-// needsTeminalPrepare determines if a function needs terminal preparation
-func (t *tester) needsTeminalPrepare(funcName string) bool {
+// needsTerminalPrepare determines if a function needs terminal preparation
+func (t *tester) needsTerminalPrepare(funcName string) bool {
 	// These functions require terminal preparation
 	terminalFunctions := map[string]bool{
 		tools.TerminalToolName: true,
