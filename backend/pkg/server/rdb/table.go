@@ -257,8 +257,12 @@ func (q *TableQuery) DataFilter() func(db *gorm.DB) *gorm.DB {
 		if _, ok := q.sqlMappers[f.Field]; ok {
 			if v, ok := f.Value.(string); ok && v != "" {
 				vs := v
+				// Init maps text fields to LOWER(column::text), so every operator compares lower case
+				if !isNumbericField(f.Field) {
+					vs = strings.ToLower(vs)
+				}
 				if slices.Contains([]string{"like", "not like"}, f.Operator) {
-					vs = "%" + strings.ToLower(vs) + "%"
+					vs = "%" + vs + "%"
 				}
 				setFilter(f.Field, f.Operator, vs)
 			}
