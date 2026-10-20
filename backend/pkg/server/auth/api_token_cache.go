@@ -22,6 +22,9 @@ type TokenCache struct {
 	cache sync.Map
 	ttl   time.Duration
 	db    *gorm.DB
+
+	storeMu sync.Mutex
+	epoch   uint64
 }
 
 // NewTokenCache creates a new token cache instance
@@ -50,10 +53,14 @@ func (tc *TokenCache) GetStatus(tokenID string) (models.TokenStatus, []string, e
 		tc.cache.Delete(tokenID)
 	}
 
+	tc.storeMu.Lock()
+	epoch := tc.epoch
+	tc.storeMu.Unlock()
+
 	var token models.APIToken
 	if err := tc.db.Where("token_id = ? AND deleted_at IS NULL", tokenID).First(&token).Error; err != nil {
 		if gorm.IsRecordNotFoundError(err) {
-			tc.cache.Store(tokenID, tokenCacheEntry{
+			tc.storeIfCurrent(epoch, tokenID, tokenCacheEntry{
 				notFound:  true,
 				expiresAt: time.Now().Add(tc.ttl),
 			})
@@ -75,7 +82,7 @@ func (tc *TokenCache) GetStatus(tokenID string) (models.TokenStatus, []string, e
 	// always add automation privilege for API tokens
 	privNames = append(privNames, PrivilegeAutomation)
 
-	tc.cache.Store(tokenID, tokenCacheEntry{
+	tc.storeIfCurrent(epoch, tokenID, tokenCacheEntry{
 		status:     token.Status,
 		privileges: privNames,
 		notFound:   false,
@@ -85,8 +92,23 @@ func (tc *TokenCache) GetStatus(tokenID string) (models.TokenStatus, []string, e
 	return token.Status, privNames, nil
 }
 
+// storeIfCurrent writes the entry only when no invalidation raced the DB read it
+// came from, so a status read before a revocation is not cached past it.
+func (tc *TokenCache) storeIfCurrent(epoch uint64, tokenID string, entry tokenCacheEntry) {
+	tc.storeMu.Lock()
+	defer tc.storeMu.Unlock()
+
+	if tc.epoch == epoch {
+		tc.cache.Store(tokenID, entry)
+	}
+}
+
 // Invalidate removes a specific token from cache
 func (tc *TokenCache) Invalidate(tokenID string) {
+	tc.storeMu.Lock()
+	defer tc.storeMu.Unlock()
+
+	tc.epoch++
 	tc.cache.Delete(tokenID)
 }
 
@@ -97,6 +119,10 @@ func (tc *TokenCache) InvalidateUser(userID uint64) {
 		return
 	}
 
+	tc.storeMu.Lock()
+	defer tc.storeMu.Unlock()
+
+	tc.epoch++
 	for _, token := range tokens {
 		tc.cache.Delete(token.TokenID)
 	}
@@ -104,6 +130,10 @@ func (tc *TokenCache) InvalidateUser(userID uint64) {
 
 // InvalidateAll clears the entire cache
 func (tc *TokenCache) InvalidateAll() {
+	tc.storeMu.Lock()
+	defer tc.storeMu.Unlock()
+
+	tc.epoch++
 	tc.cache.Range(func(key, value any) bool {
 		tc.cache.Delete(key)
 		return true

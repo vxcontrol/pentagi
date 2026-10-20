@@ -167,3 +167,27 @@ func TestAPITokenCache_InvalidateUser_DropsEveryTokenOfTheUser(t *testing.T) {
 		assert.Equal(t, apiTokenCacheRevoked, apiTokenCacheGet(cache, tokenID), tokenID)
 	}
 }
+
+func TestAPITokenCache_GetStatus_DoesNotCacheAReadOverlappingAnInvalidation(t *testing.T) {
+	db := setupTestDB(t)
+	authStoreToken(t, db, "racetoken", 1, 2)
+	cache := NewTokenCache(db)
+
+	fired := false
+	db.Callback().Query().After("gorm:query").Register("test:revoke_mid_read", func(scope *gorm.Scope) {
+		if fired || scope.TableName() != "api_tokens" {
+			return
+		}
+		fired = true
+		require.NoError(t, db.Exec("UPDATE api_tokens SET status = 'revoked' WHERE token_id = 'racetoken'").Error)
+		cache.Invalidate("racetoken")
+	})
+
+	raced := apiTokenCacheGet(cache, "racetoken")
+	require.Equal(t, apiTokenCacheActive, raced)
+	require.True(t, fired, "the revocation has to land between the read and the store")
+
+	after := apiTokenCacheGet(cache, "racetoken")
+	assert.Equal(t, apiTokenCacheRevoked, after,
+		"a status read before a revocation must not be served for the cache's whole TTL")
+}
