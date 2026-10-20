@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"strings"
 	"testing"
 
 	"pentagi/pkg/templates"
@@ -43,6 +44,9 @@ func TestAgents_FallbackHeuristicDetection_BuildsThePatternTheSamplesShare(t *te
 		{"upper case only", samples("KEY_ABCDEFGH", "KEY_ZYXWVUTS", "KEY_QPONMLKJ"), "KEY_{r:8:u}"},
 		{"no samples", samples(), ""},
 		{"a single sample is all literal", samples("test_123abc"), "test_123abc"},
+		{"a random run longer than the regexp compiles yields nothing", samples(
+			"call_"+strings.Repeat("a", 1001), "call_"+strings.Repeat("b", 1001), "call_"+strings.Repeat("c", 1001),
+		), ""},
 	}
 
 	for _, tc := range tests {

@@ -544,7 +544,12 @@ func fallbackHeuristicDetection(samples []templates.PatternSample) string {
 		}
 	}
 
-	return pattern.String()
+	template := pattern.String()
+	if templates.ValidatePatternSyntax(template) != nil {
+		return ""
+	}
+
+	return template
 }
 
 // determineCommonCharset finds charset that covers all character sets across positions
