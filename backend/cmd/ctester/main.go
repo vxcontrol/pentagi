@@ -38,7 +38,7 @@ import (
 func main() {
 	envFile := flag.String("env", ".env", "Path to environment file")
 	providerType := flag.String("type", "custom", "Provider type [custom, openai, anthropic, gemini, bedrock, ollama, deepseek, glm, kimi, qwen, minimax, mistral, xai]")
-	providerName := flag.String("name", "", "Provider name using as PROVDER_NAME/MODEL_NAME while building provider config")
+	providerName := flag.String("name", "", "Provider name using as PROVIDER_NAME/MODEL_NAME while building provider config")
 	configPath := flag.String("config", "", "Path to provider config file")
 	testsPath := flag.String("tests", "", "Path to custom tests YAML file")
 	reportPath := flag.String("report", "", "Path to write report file")

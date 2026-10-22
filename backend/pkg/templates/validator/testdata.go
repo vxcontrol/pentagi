@@ -348,7 +348,7 @@ func createBarrierTools() []tools.FunctionInfo {
 	for toolName, toolType := range toolsMapping {
 		if toolType == tools.BarrierToolType {
 			if def, ok := registryDefinitions[toolName]; ok {
-				// Convert parameters to JSON schema (simplified version of converToJSONSchema)
+				// Convert parameters to JSON schema (simplified version of convertToJSONSchema)
 				schemaJSON, err := json.Marshal(def.Parameters)
 				if err != nil {
 					continue

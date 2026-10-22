@@ -124,7 +124,7 @@ cleanedChain := ast.Messages()
 **What stays preserved**:
 - All text content
 - Tool call IDs (after normalization)
-- Function names and arguments  
+- Function names and arguments
 - Tool responses
 
 **Automatic handling**: Both `NormalizeToolCallIDs()` and `ClearReasoning()` are called automatically in `restoreChain()` to ensure full compatibility when switching providers.
@@ -254,13 +254,13 @@ graph LR
     B --> C[Message 1]
     C --> D[Message 2]
     D --> E[Message 3]
-    
+
     style A fill:#90EE90
     style B fill:#90EE90
     style C fill:#90EE90
     style D fill:#FFD700
     style E fill:#FFD700
-    
+
     A -.invalidates.-> B
     B -.invalidates.-> C
 ```
@@ -910,7 +910,7 @@ This is required for tools to work correctly.
 ```
 
 **Automatic Protection**: The summarization algorithm (`chain_summary.go`) automatically:
-1. **Skips the last body pair** in `summarizeOversizedBodyPairs()` 
+1. **Skips the last body pair** in `summarizeOversizedBodyPairs()`
 2. **Always preserves the most recent interaction** in `determineLastSectionPairs()`
 3. **Maintains reasoning signatures** for continued conversation
 
@@ -1125,7 +1125,7 @@ msgs := []llms.MessageContent{
     }},
 }
 resp1, _ := llm.GenerateContent(ctx, msgs, llms.WithModel("gpt-4.1-mini"))
-// CacheWrite: > 0, CachRead: 0
+// CacheWrite: > 0, CacheRead: 0
 
 // Turn 2 - Simple text part works!
 msgs = append(msgs,
@@ -1343,7 +1343,7 @@ When building applications that switch between providers, be aware of these **CR
 // ✓ UNIVERSAL - Works for all providers
 func buildAIMessage(choice *llms.ContentChoice) llms.MessageContent {
     var parts []llms.ContentPart
-    
+
     // Preserve reasoning if present (required for Anthropic/Gemini, harmless for OpenAI)
     if choice.Reasoning != nil {
         parts = append(parts,
@@ -1352,10 +1352,10 @@ func buildAIMessage(choice *llms.ContentChoice) llms.MessageContent {
     } else {
         parts = append(parts, llms.TextPart(choice.Content))
     }
-    
+
     // Add tool calls
     parts = append(parts, choice.ToolCalls...)
-    
+
     return llms.MessageContent{
         Role:  llms.ChatMessageTypeAI,
         Parts: parts,
@@ -1380,17 +1380,17 @@ func buildAIMessage(choice *llms.ContentChoice) llms.MessageContent {
 ```go
 func extractReasoning(resp *llms.ContentResponse, provider string) *reasoning.ContentReasoning {
     choice := resp.Choices[0]
-    
+
     switch provider {
     case "anthropic", "openai":
         return choice.Reasoning // Always at choice level
-        
+
     case "gemini":
         if len(choice.ToolCalls) > 0 {
             return choice.ToolCalls[0].Reasoning // First tool for tool calls
         }
         return choice.Reasoning // Choice level for text
-        
+
     default:
         // Universal fallback: check both locations
         if choice.Reasoning != nil {
@@ -1428,7 +1428,7 @@ func buildReasoningOptions(provider string, wantedTemp float64) []llms.CallOptio
     opts := []llms.CallOption{
         llms.WithReasoning(llms.ReasoningMedium, 2048),
     }
-    
+
     switch provider {
     case "anthropic":
         opts = append(opts, llms.WithTemperature(1.0)) // Force 1.0
@@ -1438,7 +1438,7 @@ func buildReasoningOptions(provider string, wantedTemp float64) []llms.CallOptio
     case "gemini":
         opts = append(opts, llms.WithTemperature(wantedTemp)) // Flexible
     }
-    
+
     return opts
 }
 ```
@@ -1460,7 +1460,7 @@ func buildReasoningOptions(provider string, wantedTemp float64) []llms.CallOptio
 ```go
 func setupCaching(provider string, systemPrompt string) []llms.CallOption {
     var opts []llms.CallOption
-    
+
     switch provider {
     case "anthropic":
         // Inline cache control with strategy
@@ -1473,7 +1473,7 @@ func setupCaching(provider string, systemPrompt string) []llms.CallOption {
                 TTL:           "5m",
             }),
         )
-        
+
     case "gemini":
         // Large content: use explicit caching
         if len(systemPrompt) > 24000 {
@@ -1482,12 +1482,12 @@ func setupCaching(provider string, systemPrompt string) []llms.CallOption {
         }
         // Small content: rely on implicit caching with signature preservation
         // Just ensure llms.WithReasoning() is used with gemini-3-flash-preview
-        
+
     case "openai":
         // Nothing to configure - fully automatic
         // Just monitor metrics to verify cache hits
     }
-    
+
     return opts
 }
 ```
@@ -1530,17 +1530,17 @@ aiParts := []llms.ContentPart{
 ```go
 func buildUniversalAIMessage(choice *llms.ContentChoice) llms.MessageContent {
     var parts []llms.ContentPart
-    
+
     // Add text with reasoning if present (safe for all providers)
     if choice.Content != "" || choice.Reasoning != nil {
         parts = append(parts,
             llms.TextPartWithReasoning(choice.Content, choice.Reasoning),
         )
     }
-    
+
     // Add all tool calls
     parts = append(parts, choice.ToolCalls...)
-    
+
     return llms.MessageContent{
         Role:  llms.ChatMessageTypeAI,
         Parts: parts,
@@ -1575,17 +1575,17 @@ func extractReasoningContent(choice *llms.ContentChoice) string {
     if choice.Reasoning != nil && choice.Reasoning.Content != "" {
         return choice.Reasoning.Content
     }
-    
+
     // Gemini: check first tool call
     if len(choice.ToolCalls) > 0 && choice.ToolCalls[0].Reasoning != nil {
         return choice.ToolCalls[0].Reasoning.Content
     }
-    
+
     // Check if reasoning was used (even if content not returned)
     if reasoningTokens, ok := choice.GenerationInfo["ReasoningTokens"].(int); ok && reasoningTokens > 0 {
         return "[reasoning used but content not available]"
     }
-    
+
     return ""
 }
 ```
@@ -1627,21 +1627,21 @@ func (c *MultiProviderClient) SendMessage(
     enableReasoning bool,
 ) (*llms.ContentResponse, error) {
     opts := c.buildOptions(enableReasoning)
-    
+
     resp, err := c.llm.GenerateContent(ctx, messages, opts...)
     if err != nil {
         return nil, err
     }
-    
+
     return resp, nil
 }
 
 func (c *MultiProviderClient) buildOptions(enableReasoning bool) []llms.CallOption {
     var opts []llms.CallOption
-    
+
     if enableReasoning {
         opts = append(opts, llms.WithReasoning(llms.ReasoningMedium, 2048))
-        
+
         // Provider-specific temperature
         switch c.provider {
         case "anthropic":
@@ -1654,10 +1654,10 @@ func (c *MultiProviderClient) buildOptions(enableReasoning bool) []llms.CallOpti
             opts = append(opts, llms.WithTemperature(0.7))
         }
     }
-    
+
     // Provider-specific caching
     opts = append(opts, c.setupCaching()...)
-    
+
     return opts
 }
 
@@ -1689,10 +1689,10 @@ func (c *MultiProviderClient) ContinueConversation(
     lastResponse *llms.ContentResponse,
 ) []llms.MessageContent {
     choice := lastResponse.Choices[0]
-    
+
     // Build AI message in provider-agnostic way
     var parts []llms.ContentPart
-    
+
     // Extract reasoning (location differs by provider)
     var reasoning *reasoning.ContentReasoning
     switch c.provider {
@@ -1705,7 +1705,7 @@ func (c *MultiProviderClient) ContinueConversation(
             reasoning = choice.Reasoning
         }
     }
-    
+
     // Build parts list
     if choice.Content != "" || reasoning != nil {
         parts = append(parts,
@@ -1713,7 +1713,7 @@ func (c *MultiProviderClient) ContinueConversation(
         )
     }
     parts = append(parts, choice.ToolCalls...)
-    
+
     return append(messages, llms.MessageContent{
         Role:  llms.ChatMessageTypeAI,
         Parts: parts,
@@ -1859,7 +1859,7 @@ The library automatically handles these provider-specific edge cases:
 ---
 
 **Version**: Based on APIs as of 2025-01
-**Providers**: 
+**Providers**:
 - Anthropic: Claude 3.7, Sonnet 4, Haiku 4.5+
 - Gemini: gemini-2.5-flash, gemini-3-flash-preview
 - OpenAI: o1, o3, o4, gpt-4.1+, and OpenAI-compatible backends

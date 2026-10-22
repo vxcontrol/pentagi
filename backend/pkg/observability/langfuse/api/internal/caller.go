@@ -28,7 +28,7 @@ type Caller struct {
 	retrier *Retrier
 }
 
-// CallerParams represents the parameters used to constrcut a new *Caller.
+// CallerParams represents the parameters used to construct a new *Caller.
 type CallerParams struct {
 	Client      core.HTTPClient
 	MaxAttempts uint

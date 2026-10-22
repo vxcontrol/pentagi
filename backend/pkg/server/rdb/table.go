@@ -83,7 +83,7 @@ func (q *TableQuery) Init(table string, sqlMappers map[string]any) error {
 		switch t := v.(type) {
 		case string:
 			t = q.DoConditionFormat(t)
-			if isNumbericField(k) {
+			if isNumericField(k) {
 				q.sqlMappers[k] = t
 			} else {
 				q.sqlMappers[k] = "LOWER(" + t + "::text)"
@@ -239,12 +239,12 @@ func (q *TableQuery) DataFilter() func(db *gorm.DB) *gorm.DB {
 		switch f.Operator {
 		case "<", "<=", ">=", ">", "=", "!=", "in":
 		case "not like":
-			if isNumbericField(f.Field) {
+			if isNumericField(f.Field) {
 				f.Operator = "!="
 			}
 		default:
 			f.Operator = "like"
-			if isNumbericField(f.Field) {
+			if isNumericField(f.Field) {
 				f.Operator = "="
 			}
 		}
@@ -383,6 +383,6 @@ func MakeUuidStrFromHash(hash string) (string, error) {
 	return userIdUuid.String(), nil
 }
 
-func isNumbericField(field string) bool {
+func isNumericField(field string) bool {
 	return strings.HasSuffix(field, "_id") || strings.HasSuffix(field, "_at") || field == "id"
 }

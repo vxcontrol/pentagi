@@ -60,7 +60,7 @@ func (p Prompt) Validate(db *gorm.DB) {
 	}
 }
 
-// PatchPrompt is model to contain prompt patching paylaod
+// PatchPrompt is model to contain prompt patching payload
 type PatchPrompt struct {
 	Prompt string `form:"prompt" json:"prompt" validate:"required"`
 }

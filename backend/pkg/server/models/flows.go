@@ -80,7 +80,7 @@ func (f Flow) Validate(db *gorm.DB) {
 	}
 }
 
-// CreateFlow is model to contain flow creation paylaod
+// CreateFlow is model to contain flow creation payload
 // nolint:lll
 type CreateFlow struct {
 	Input       string           `form:"input" json:"input" validate:"required" example:"user input for first task in the flow"`
@@ -94,7 +94,7 @@ func (cf CreateFlow) Valid() error {
 	return validate.Struct(cf)
 }
 
-// PatchFlow is model to contain flow patching paylaod
+// PatchFlow is model to contain flow patching payload
 // nolint:lll
 type PatchFlow struct {
 	Action      string   `form:"action" json:"action" validate:"required,oneof=stop finish input rename report" enums:"stop,finish,input,rename,report" default:"stop"`
