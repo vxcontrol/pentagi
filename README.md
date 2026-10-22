@@ -2799,7 +2799,7 @@ Visit [localhost:3000](http://localhost:3000) to access Grafana Web UI.
 > [!IMPORTANT]
 > Graphiti is an optional **beta** integration and is disabled by default. Review [Limitations and Security](#limitations-and-security) before enabling it in production.
 
-PentAGI integrates with [Graphiti](https://github.com/vxcontrol/pentagi-graphiti), a temporal knowledge graph system powered by Neo4j, to provide advanced semantic understanding and relationship tracking for AI agent operations. The vxcontrol fork provides custom entity and edge types that are specific to pentesting purposes.
+PentAGI integrates with [Graphiti](https://github.com/getzep/graphiti), a temporal knowledge graph system powered by Neo4j, to provide advanced semantic understanding and relationship tracking for AI agent operations. The vxcontrol fork, published as the [vxcontrol/graphiti](https://hub.docker.com/r/vxcontrol/graphiti) image, provides custom entity and edge types that are specific to pentesting purposes.
 
 #### What is Graphiti?
 
