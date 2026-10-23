@@ -202,6 +202,12 @@ func (m *ApplyChangesFormModel) GetHelpContent() string {
 		if config.ObservabilityEnabled {
 			sections = append(sections, locale.ApplyChangesInstallFoundObservability)
 		}
+		if m.GetController().GetChecker().PentagiVolumesExist {
+			if config.LangfuseEnabled || config.ObservabilityEnabled {
+				sections = append(sections, "")
+			}
+			sections = append(sections, m.GetStyles().Warning.Render(locale.MessageExistingDatabaseReused))
+		}
 	} else {
 		sections = append(sections, locale.ApplyChangesUpdateFound)
 	}

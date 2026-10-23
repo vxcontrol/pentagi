@@ -290,15 +290,16 @@ func (c *CheckResult) CanUpdateInstaller() bool {
 	return !c.InstallerIsUpToDate && c.UpdateServerAccessible
 }
 
-// CanFactoryReset returns true when any compose stack is installed
-func (c *CheckResult) CanFactoryReset() bool {
+// CanFactoryReset returns true when any compose stack is installed or PentAGI volumes
+// outlived their containers: `down -v` removes the declared volumes without a container
+func (c *CheckResult) CanFactoryReset() bool { return c.CanRemoveAll() || c.PentagiVolumesExist }
+
+// CanRemoveAll returns true when any compose stack is installed
+func (c *CheckResult) CanRemoveAll() bool {
 	return c.PentagiInstalled || c.GraphitiInstalled || c.LangfuseInstalled || c.ObservabilityInstalled
 }
 
-// CanRemoveAll returns true when any compose stack is installed
-func (c *CheckResult) CanRemoveAll() bool { return c.CanFactoryReset() }
-
-// CanPurgeAll returns true when any compose stack is installed
+// CanPurgeAll mirrors CanFactoryReset: both remove the volumes
 func (c *CheckResult) CanPurgeAll() bool { return c.CanFactoryReset() }
 
 // CanResetPassword returns true when PentAGI is running

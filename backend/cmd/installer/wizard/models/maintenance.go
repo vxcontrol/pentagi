@@ -93,7 +93,7 @@ func (h *MaintenanceHandler) LoadItems() []ListItem {
 		})
 	}
 
-	// factory Reset - always show if anything is installed
+	// factory Reset - show if any stack is installed or PentAGI volumes are left behind
 	if checker.CanFactoryReset() {
 		items = append(items, ListItem{
 			ID: FactoryResetScreen,
@@ -107,7 +107,7 @@ func (h *MaintenanceHandler) LoadItems() []ListItem {
 		})
 	}
 
-	// purge PentAGI - show if any stack is installed
+	// purge PentAGI - show if any stack is installed or PentAGI volumes are left behind
 	if checker.CanPurgeAll() {
 		items = append(items, ListItem{
 			ID: PurgePentagiScreen,
