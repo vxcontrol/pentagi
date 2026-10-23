@@ -175,6 +175,18 @@ func TestTemplates_ValidatePattern_NamesWhereASampleDiverges(t *testing.T) {
 			samples: []PatternSample{{Value: "wrong_name:0", FunctionName: "get_number"}},
 			wantErr: []string{"pattern mismatch"},
 		},
+		{
+			name:    "a repeat the regexp cannot compile",
+			pattern: "call_{r:1001:x}",
+			samples: []PatternSample{{Value: "call_x"}},
+			wantErr: []string{"exceeds 1000"},
+		},
+		{
+			name:    "no sample excuses a repeat the regexp cannot compile",
+			pattern: "call_{r:1001:x}",
+			samples: []PatternSample{},
+			wantErr: []string{"exceeds 1000"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -189,4 +201,33 @@ func TestTemplates_ValidatePattern_NamesWhereASampleDiverges(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTemplates_ValidatePatternSyntax_StopsAtTheLargestRepeatTheRegexpCompiles(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		wantErr string
+	}{
+		{"the largest repeat the regexp compiles", "call_{r:1000:x}", ""},
+		{"one above it", "call_{r:1001:x}", "exceeds 1000"},
+		{"a count that overflows int", "call_{r:99999999999999999999:x}", "exceeds 1000"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidatePatternSyntax(tt.pattern)
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+				return
+			}
+			assert.ErrorContains(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestTemplates_GenerateFromPattern_FallsBackToTheDefaultTemplateWhenThePatternCannotCompile(t *testing.T) {
+	got := GenerateFromPattern("call_{r:1001:x}", "")
+
+	assert.Regexp(t, `^call_[a-zA-Z0-9]{24}$`, got)
 }

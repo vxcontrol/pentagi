@@ -45,7 +45,7 @@ type dummyMessage struct {
 }
 
 func toolCallIDTemplateOrDefault(template string) string {
-	if template != "" {
+	if template != "" && templates.ValidatePatternSyntax(template) == nil {
 		return template
 	}
 

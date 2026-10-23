@@ -17,7 +17,7 @@ const (
 	FallbackResponseContent = "the call was not handled, please try again"
 	SummarizationToolName   = "execute_task_and_return_summary"
 	SummarizationToolArgs   = `{"question": "delegate and execute the task, then return the summary of the result"}`
-	ToolCallIDTemplate      = "call_{r:24:x}"
+	ToolCallIDTemplate      = templates.DefaultToolCallIDTemplate
 
 	// Fake reasoning signatures for different providers when summarizing content
 	// that originally contained reasoning signatures

@@ -583,6 +583,7 @@ func TestHelpers_ToolCallIDTemplateOrDefault_NeverYieldsAnEmptyTemplate(t *testi
 	}{
 		{name: "an empty detection falls back to the default", detected: "", want: "call_{r:24:x}"},
 		{name: "a detected pattern is kept", detected: "toolu_{r:24:b}", want: "toolu_{r:24:b}"},
+		{name: "a pattern the regexp cannot compile falls back to the default", detected: "call_{r:1001:x}", want: "call_{r:24:x}"},
 	}
 
 	for _, tt := range tests {

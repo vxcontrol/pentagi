@@ -785,6 +785,13 @@ const (
 
 var patternRegex = regexp.MustCompile(`\{r:(\d+):(d|digit|l|lower|u|upper|a|alpha|x|alnum|h|hex|H|HEX|b|base62)\}|\{f\}`)
 
+// DefaultToolCallIDTemplate is the pattern used when a provider's own could not
+// be detected or does not compile.
+const DefaultToolCallIDTemplate = "call_{r:24:x}"
+
+// maxRandomPartLength is the largest repeat count Go's regexp compiles.
+const maxRandomPartLength = 1000
+
 type patternPart struct {
 	literal    string
 	isRandom   bool
@@ -817,8 +824,14 @@ func getCharset(name string) string {
 	}
 }
 
+// ValidatePatternSyntax reports whether pattern can be compiled and generated from.
+func ValidatePatternSyntax(pattern string) error {
+	_, err := parsePattern(pattern)
+	return err
+}
+
 // parsePattern parses a pattern string into parts
-func parsePattern(pattern string) []patternPart {
+func parsePattern(pattern string) ([]patternPart, error) {
 	var parts []patternPart
 	lastIndex := 0
 
@@ -842,7 +855,12 @@ func parsePattern(pattern string) []patternPart {
 			})
 		} else {
 			// Parse random part
-			length, _ := strconv.Atoi(pattern[match[2]:match[3]])
+			lengthText := pattern[match[2]:match[3]]
+			length, err := strconv.Atoi(lengthText)
+			if err != nil || length > maxRandomPartLength {
+				return nil, fmt.Errorf("pattern %q: random part length %s exceeds %d",
+					pattern, lengthText, maxRandomPartLength)
+			}
 			charsetName := pattern[match[4]:match[5]]
 			parts = append(parts, patternPart{
 				isRandom: true,
@@ -863,7 +881,7 @@ func parsePattern(pattern string) []patternPart {
 		})
 	}
 
-	return parts
+	return parts, nil
 }
 
 // generateRandomString generates a random string of specified length using the given charset
@@ -889,13 +907,17 @@ func generateRandomString(length int, charset string) string {
 }
 
 // GenerateFromPattern generates a random string matching the given pattern template.
-// This function never returns an error - it uses fallback values for invalid patterns.
+// This function never returns an error - it uses fallback values for invalid patterns,
+// and a pattern that does not compile yields an ID of DefaultToolCallIDTemplate.
 //
 // Pattern format: literal text with {r:LENGTH:CHARSET} for random parts and {f} for function name
 // Example: "toolu_{r:24:base62}" → "toolu_xK9pQw2mN5vR8tY7uI6oP3zA"
 // Example: "{f}:{r:1:d}" with functionName="get_number" → "get_number:0"
 func GenerateFromPattern(pattern string, functionName string) string {
-	parts := parsePattern(pattern)
+	parts, err := parsePattern(pattern)
+	if err != nil {
+		parts, _ = parsePattern(DefaultToolCallIDTemplate)
+	}
 	var result strings.Builder
 
 	for _, part := range parts {
@@ -944,11 +966,10 @@ func (e *PatternValidationError) Error() string {
 // Pattern format: literal text with {r:LENGTH:CHARSET} for random parts and {f} for function name
 // Example: ValidatePattern("call_{r:24:alnum}", []PatternSample{{Value: "call_abc123..."}})
 func ValidatePattern(pattern string, samples []PatternSample) error {
-	if len(samples) == 0 {
-		return nil
+	parts, err := parsePattern(pattern)
+	if err != nil {
+		return err
 	}
-
-	parts := parsePattern(pattern)
 
 	// Validate each sample
 	for _, sample := range samples {
@@ -981,7 +1002,10 @@ func ValidatePattern(pattern string, samples []PatternSample) error {
 		}
 
 		regexPattern := "^" + strings.Join(regexParts, "") + "$"
-		re := regexp.MustCompile(regexPattern)
+		re, err := regexp.Compile(regexPattern)
+		if err != nil {
+			return fmt.Errorf("pattern %q: %w", pattern, err)
+		}
 
 		// Check length
 		if len(value) != expectedLen {
