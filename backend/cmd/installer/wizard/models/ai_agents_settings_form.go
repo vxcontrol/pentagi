@@ -175,21 +175,22 @@ func (m *AIAgentsSettingsFormModel) validateBooleanField(value, fieldName string
 	return nil
 }
 
-func (m *AIAgentsSettingsFormModel) validateIntegerField(value, fieldName string, min, max int) (int, error) {
+func (m *AIAgentsSettingsFormModel) validateIntegerField(value, fieldName string, min, max int) (string, error) {
 	if value == "" {
-		return 0, fmt.Errorf("%s cannot be empty", fieldName)
+		// Blank optional values leave the backend default in effect.
+		return "", nil
 	}
 
 	intVal, err := strconv.Atoi(value)
 	if err != nil {
-		return 0, fmt.Errorf("invalid integer value for %s: %s", fieldName, value)
+		return "", fmt.Errorf("invalid integer value for %s: %s", fieldName, value)
 	}
 
 	if intVal < min || intVal > max {
-		return 0, fmt.Errorf("%s must be between %d and %s", fieldName, min, m.formatNumber(max))
+		return "", fmt.Errorf("%s must be between %d and %s", fieldName, min, m.formatNumber(max))
 	}
 
-	return intVal, nil
+	return strconv.Itoa(intVal), nil
 }
 
 func (m *AIAgentsSettingsFormModel) formatNumber(n int) string {
@@ -336,28 +337,28 @@ func (m *AIAgentsSettingsFormModel) HandleSave() error {
 			if val, err := m.validateIntegerField(value, locale.ToolsAIAgentsSettingSameToolLimit, 1, 50); err != nil {
 				return err
 			} else {
-				newCfg.ExecutionMonitorSameToolLimit.Value = strconv.Itoa(val)
+				newCfg.ExecutionMonitorSameToolLimit.Value = val
 			}
 
 		case "execution_monitor_total_tool_limit":
 			if val, err := m.validateIntegerField(value, locale.ToolsAIAgentsSettingTotalToolLimit, 1, 100); err != nil {
 				return err
 			} else {
-				newCfg.ExecutionMonitorTotalToolLimit.Value = strconv.Itoa(val)
+				newCfg.ExecutionMonitorTotalToolLimit.Value = val
 			}
 
 		case "max_general_agent_tool_calls":
 			if val, err := m.validateIntegerField(value, locale.ToolsAIAgentsSettingMaxGeneralToolCalls, 10, 500); err != nil {
 				return err
 			} else {
-				newCfg.MaxGeneralAgentToolCalls.Value = strconv.Itoa(val)
+				newCfg.MaxGeneralAgentToolCalls.Value = val
 			}
 
 		case "max_limited_agent_tool_calls":
 			if val, err := m.validateIntegerField(value, locale.ToolsAIAgentsSettingMaxLimitedToolCalls, 5, 200); err != nil {
 				return err
 			} else {
-				newCfg.MaxLimitedAgentToolCalls.Value = strconv.Itoa(val)
+				newCfg.MaxLimitedAgentToolCalls.Value = val
 			}
 
 		case "agent_planning_step_enabled":
