@@ -707,6 +707,12 @@ func (s *UserService) PatchUser(c *gin.Context) {
 		return
 	}
 
+	if !s.canManageUser(c, existingUser) {
+		logger.FromContext(c).Errorf("error checking target user privileges on update")
+		response.Error(c, response.ErrNotPermitted, nil)
+		return
+	}
+
 	if user.Password != "" {
 		var encPassword []byte
 		encPassword, err = rdb.EncryptPassword(user.Password)
@@ -810,6 +816,12 @@ func (s *UserService) DeleteUser(c *gin.Context) {
 		return
 	}
 
+	if !s.canManageUser(c, user.User) {
+		logger.FromContext(c).Errorf("error checking target user privileges on delete")
+		response.Error(c, response.ErrNotPermitted, nil)
+		return
+	}
+
 	if err = s.db.Take(&user.Role, "id = ?", user.User.RoleID).Error; err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error finding role by role id")
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -856,6 +868,30 @@ func (s *UserService) GetUserPrivileges(c *gin.Context, rid uint64) ([]string, e
 	}
 
 	return privs, nil
+}
+
+// canManageUser reports whether the caller may edit or delete the target user.
+// Acting on one's own record is always allowed here (the callers already gate it),
+// while acting on another user requires holding every privilege of the target's
+// role, the same rule CreateUser applies, so a limited editor cannot reset the
+// password of, block or delete a more privileged account.
+func (s *UserService) canManageUser(c *gin.Context, target models.User) bool {
+	if target.ID == c.GetUint64("uid") {
+		return true
+	}
+
+	privsCurrentUser, err := s.GetUserPrivileges(c, c.GetUint64("rid"))
+	if err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error getting current user privileges")
+		return false
+	}
+	privsTargetUser, err := s.GetUserPrivileges(c, target.RoleID)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error getting target user privileges")
+		return false
+	}
+
+	return s.CheckPrivilege(c, privsCurrentUser, privsTargetUser)
 }
 
 // CheckPrivilege is a function to check if user has privilege

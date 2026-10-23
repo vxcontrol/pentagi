@@ -532,3 +532,101 @@ func TestUsers_ChangePassword_ChangesNothingWhenAStepFails(t *testing.T) {
 		}
 	}
 }
+
+func TestUsers_PatchAndDeleteUser_RefuseATargetWithPrivilegesTheCallerLacks(t *testing.T) {
+	const (
+		editorUID  = 10
+		editorRole = 3
+		adminHash  = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		peerHash   = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	)
+	editorPrivs := []string{"users.edit", "users.delete"}
+
+	for _, tc := range []struct {
+		name     string
+		hash     string
+		wantCode int
+		survives bool
+	}{
+		{"an administrator account", adminHash, http.StatusForbidden, true},
+		{"an account whose privileges the caller holds", peerHash, http.StatusOK, false},
+	} {
+		t.Run("patch "+tc.name, func(t *testing.T) {
+			db := setupUsersEditorDB(t, editorRole, adminHash, peerHash)
+			defer db.Close()
+			service := NewUserService(db, auth.NewUserCache(db), "/api/v1", 4*60*60)
+
+			body := `{"hash":"` + tc.hash + `","mail":"x@test.com","name":"Renamed","status":"blocked","role_id":2,"type":"local"`
+			if tc.survives {
+				body += `,"password":"SecurePass123!"`
+			}
+			body += `}`
+			w := usersPatchCall(service.PatchUser, tc.hash, editorUID, editorRole, editorPrivs, body)
+
+			require.Equal(t, tc.wantCode, w.Code, w.Body.String())
+			var target models.UserPassword
+			require.NoError(t, db.Where("hash = ?", tc.hash).First(&target).Error)
+			if tc.survives {
+				assert.NotEqual(t, "Renamed", target.Name)
+				assert.Equal(t, models.UserStatus("active"), target.Status)
+				assert.Empty(t, target.Password, "the password of a more privileged account stays untouched")
+			} else {
+				assert.Equal(t, "Renamed", target.Name)
+			}
+		})
+
+		t.Run("delete "+tc.name, func(t *testing.T) {
+			db := setupUsersEditorDB(t, editorRole, adminHash, peerHash)
+			defer db.Close()
+			service := NewUserService(db, auth.NewUserCache(db), "/api/v1", 4*60*60)
+
+			w := usersPatchCall(service.DeleteUser, tc.hash, editorUID, editorRole, editorPrivs, "")
+
+			require.Equal(t, tc.wantCode, w.Code, w.Body.String())
+			var count int
+			require.NoError(t, db.Model(&models.User{}).Where("hash = ?", tc.hash).Count(&count).Error)
+			if tc.survives {
+				assert.Equal(t, 1, count)
+			} else {
+				assert.Equal(t, 0, count)
+			}
+		})
+	}
+}
+
+// setupUsersEditorDB adds a role holding only the given privileges, its member, an administrator and a plain user.
+func setupUsersEditorDB(t *testing.T, editorRole int, adminHash, peerHash string) *gorm.DB {
+	t.Helper()
+	db := setupTestDB(t)
+	require.NoError(t, db.Exec("INSERT INTO roles (id, name) VALUES (?, 'Editor')", editorRole).Error)
+	require.NoError(t, db.Exec("INSERT INTO privileges (role_id, name) VALUES (?, 'users.edit'), (?, 'users.delete'), (?, 'flows.view')",
+		editorRole, editorRole, editorRole).Error)
+	require.NoError(t, db.Exec("INSERT INTO roles (id, name) VALUES (4, 'Viewer')").Error)
+	require.NoError(t, db.Exec("INSERT INTO privileges (role_id, name) VALUES (4, 'flows.view')").Error)
+	for _, u := range []struct {
+		id   int
+		hash string
+		role int
+	}{{10, "cccccccccccccccccccccccccccccccc", editorRole}, {11, adminHash, 1}, {12, peerHash, 4}} {
+		require.NoError(t, db.Exec("INSERT INTO users (id, hash, mail, name, status, role_id) VALUES (?, ?, ?, 'Name', 'active', ?)",
+			u.id, u.hash, u.hash+"@test.com", u.role).Error)
+	}
+	return db
+}
+
+func usersPatchCall(handler gin.HandlerFunc, hash string, uid, rid uint64, privs []string, body string) *httptest.ResponseRecorder {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Set("uid", uid)
+	c.Set("uhash", "cccccccccccccccccccccccccccccccc")
+	c.Set("rid", rid)
+	c.Set("prm", privs)
+	c.Params = gin.Params{{Key: "hash", Value: hash}}
+	c.Request = httptest.NewRequest(http.MethodPut, "/users/"+hash, strings.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler(c)
+
+	return w
+}
