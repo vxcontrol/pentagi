@@ -474,6 +474,48 @@ func TestAPITokens_UpdateToken_ChangesNameAndStatusForTheOwnerOrAnAdmin(t *testi
 	}
 }
 
+func TestAPITokens_Handlers_RequireTheSettingsTokensPrivileges(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	require.NoError(t, db.Create(&models.APIToken{TokenID: "gated1", UserID: 1, RoleID: 2,
+		TTL: 3600, Status: models.TokenStatusActive}).Error)
+
+	subs := &recordingTokenSubs{}
+	service := NewTokenService(db, "custom_salt", auth.NewTokenCache(db), subs)
+
+	// settings.tokens.admin widens whose tokens a caller can reach, it does not
+	// stand in for the per-operation privileges, same as in the GraphQL resolvers.
+	for _, privs := range [][]string{nil, {"settings.tokens.admin"}} {
+		w := apiTokensCall(service.CreateToken, 1, privs, "", `{"ttl": 3600}`)
+		require.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+		assert.Contains(t, w.Body.String(), `"code":"NotPermitted"`)
+
+		w = apiTokensCall(service.ListTokens, 1, privs, "", "")
+		require.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+		assert.Contains(t, w.Body.String(), `"code":"NotPermitted"`)
+
+		w = apiTokensCall(service.GetToken, 1, privs, "gated1", "")
+		require.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+		assert.Contains(t, w.Body.String(), `"code":"NotPermitted"`)
+
+		w = apiTokensCall(service.UpdateToken, 1, privs, "gated1", `{"status": "revoked"}`)
+		require.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+		assert.Contains(t, w.Body.String(), `"code":"NotPermitted"`)
+
+		w = apiTokensCall(service.DeleteToken, 1, privs, "gated1", "")
+		require.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+		assert.Contains(t, w.Body.String(), `"code":"NotPermitted"`)
+	}
+
+	var token models.APIToken
+	require.NoError(t, db.Where("token_id = ?", "gated1").First(&token).Error)
+	assert.Equal(t, models.TokenStatusActive, token.Status, "refused calls must not change the token")
+	assert.Empty(t, subs.created)
+	assert.Empty(t, subs.updated)
+	assert.Empty(t, subs.deleted)
+}
+
 func TestAPITokens_DeleteToken_SoftDeletesForTheOwnerOrAnAdmin(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
