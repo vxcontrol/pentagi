@@ -16,6 +16,7 @@ import (
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 	"github.com/vxcontrol/langchaingo/llms"
+	"google.golang.org/genai"
 )
 
 const (
@@ -390,10 +391,18 @@ func isTooManyRequestsError(err error) bool {
 		if errThrottling, ok := errNested.(*types.ThrottlingException); ok && errThrottling.Message != nil {
 			return strings.Contains(strings.ToLower(*errThrottling.Message), "too many requests")
 		}
+		// The genai client behind the Gemini provider returns APIError by value.
+		if errGemini, ok := errNested.(genai.APIError); ok {
+			return errGemini.Code == http.StatusTooManyRequests
+		}
+		if errGemini, ok := errNested.(*genai.APIError); ok && errGemini != nil {
+			return errGemini.Code == http.StatusTooManyRequests
+		}
 	}
 
 	errStr := strings.ToLower(err.Error())
-	if strings.Contains(errStr, "statuscode: 429") || strings.Contains(errStr, "status code: 429") {
+	if strings.Contains(errStr, "statuscode: 429") || strings.Contains(errStr, "status code: 429") ||
+		strings.Contains(errStr, "error 429, message:") || strings.Contains(errStr, "status: resource_exhausted") {
 		return true
 	}
 	if strings.Contains(errStr, "toomanyrequests") || strings.Contains(errStr, "too many requests") ||
