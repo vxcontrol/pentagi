@@ -43,6 +43,19 @@ func NewTokenService(
 	}
 }
 
+// requireTokenPrivilege mirrors the privilege gate the GraphQL token resolvers
+// apply: the caller must hold the privilege for the operation itself, while
+// settings.tokens.admin keeps only its cross-user scope from the handlers below.
+func requireTokenPrivilege(c *gin.Context, privilege string) bool {
+	if auth.LookupPerm(c.GetStringSlice("prm"), privilege) {
+		return true
+	}
+
+	logger.FromContext(c).Errorf("user %d attempted a token action without the '%s' privilege", c.GetUint64("uid"), privilege)
+	response.Error(c, response.ErrNotPermitted, errors.New("not permitted to manage API tokens"))
+	return false
+}
+
 func storedTokenName(name *string) *string {
 	if name != nil && *name == "" {
 		return nil
@@ -63,6 +76,10 @@ func storedTokenName(name *string) *string {
 // @Failure 500 {object} response.errorResp "internal error on creating token"
 // @Router /tokens [post]
 func (s *TokenService) CreateToken(c *gin.Context) {
+	if !requireTokenPrivilege(c, "settings.tokens.create") {
+		return
+	}
+
 	if s.globalSalt == "" || s.globalSalt == "salt" {
 		logger.FromContext(c).Errorf("token creation attempted with default salt")
 		response.Error(c, response.ErrTokenCreationDisabled, errors.New("token creation is disabled with default salt"))
@@ -158,6 +175,10 @@ func (s *TokenService) CreateToken(c *gin.Context) {
 // @Failure 500 {object} response.errorResp "internal error on listing tokens"
 // @Router /tokens [get]
 func (s *TokenService) ListTokens(c *gin.Context) {
+	if !requireTokenPrivilege(c, "settings.tokens.view") {
+		return
+	}
+
 	uid := c.GetUint64("uid")
 	prms := c.GetStringSlice("prm")
 
@@ -204,6 +225,10 @@ func (s *TokenService) ListTokens(c *gin.Context) {
 // @Failure 500 {object} response.errorResp "internal error on getting token"
 // @Router /tokens/{tokenID} [get]
 func (s *TokenService) GetToken(c *gin.Context) {
+	if !requireTokenPrivilege(c, "settings.tokens.view") {
+		return
+	}
+
 	uid := c.GetUint64("uid")
 	prms := c.GetStringSlice("prm")
 	tokenID := c.Param("tokenID")
@@ -254,6 +279,10 @@ func (s *TokenService) GetToken(c *gin.Context) {
 // @Failure 500 {object} response.errorResp "internal error on updating token"
 // @Router /tokens/{tokenID} [put]
 func (s *TokenService) UpdateToken(c *gin.Context) {
+	if !requireTokenPrivilege(c, "settings.tokens.edit") {
+		return
+	}
+
 	uid := c.GetUint64("uid")
 	prms := c.GetStringSlice("prm")
 	tokenID := c.Param("tokenID")
@@ -360,6 +389,10 @@ func (s *TokenService) UpdateToken(c *gin.Context) {
 // @Failure 500 {object} response.errorResp "internal error on deleting token"
 // @Router /tokens/{tokenID} [delete]
 func (s *TokenService) DeleteToken(c *gin.Context) {
+	if !requireTokenPrivilege(c, "settings.tokens.delete") {
+		return
+	}
+
 	uid := c.GetUint64("uid")
 	prms := c.GetStringSlice("prm")
 	tokenID := c.Param("tokenID")
