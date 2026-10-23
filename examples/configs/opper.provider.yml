@@ -1,0 +1,156 @@
+# Opper provider configuration (OpenAI-compatible AI gateway).
+# Use via the custom LLM endpoint:
+#   LLM_SERVER_URL=https://api.opper.ai/v3/compat
+#   LLM_SERVER_KEY=your_opper_api_key
+#   LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/opper.provider.yml
+# Leave LLM_SERVER_PROVIDER empty: the model names below carry no prefix.
+#
+# Strategy:
+#   - gpt-5.4-mini for utility, JSON, search and installer calls;
+#   - claude-sonnet-4-6 for planning, agent, coding and pentest work;
+#   - max effort for the refiner only.
+#
+# Model names are Opper pool names, served by every provider that carries the
+# model, with the route picked per request. A provider/model name such as
+# aws/claude-sonnet-4-6-eu pins one route instead.
+#
+# Reasoning control notes:
+#   - Claude roles set an explicit effort, sent as reasoning_effort;
+#   - GPT roles leave reasoning unset, because an explicit GPT-5.4 effort is
+#     refused when the call carries tools.
+# Sampling parameters are omitted throughout.
+#
+# Prices were read from https://api.opper.ai/v3/models on 2026-10-05 and are
+# dollars per 1M tokens. Re-validate after model or routing changes.
+
+simple:
+  model: "gpt-5.4-mini"
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 0.75
+    output: 4.5
+    cache_read: 0.075
+
+simple_json:
+  model: "gpt-5.4-mini"
+  n: 1
+  max_tokens: 4096
+  json: true
+  price:
+    input: 0.75
+    output: 4.5
+    cache_read: 0.075
+
+primary_agent:
+  model: "claude-sonnet-4-6"
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+
+assistant:
+  model: "claude-sonnet-4-6"
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+
+generator:
+  model: "claude-sonnet-4-6"
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    effort: high
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+
+refiner:
+  model: "claude-sonnet-4-6"
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    effort: max
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+
+adviser:
+  model: "claude-sonnet-4-6"
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+
+reflector:
+  model: "gpt-5.4-mini"
+  n: 1
+  max_tokens: 4096
+  price:
+    input: 0.75
+    output: 4.5
+    cache_read: 0.075
+
+searcher:
+  model: "gpt-5.4-mini"
+  n: 1
+  max_tokens: 4096
+  price:
+    input: 0.75
+    output: 4.5
+    cache_read: 0.075
+
+enricher:
+  model: "gpt-5.4-mini"
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 0.75
+    output: 4.5
+    cache_read: 0.075
+
+coder:
+  model: "claude-sonnet-4-6"
+  n: 1
+  max_tokens: 20480
+  reasoning:
+    effort: high
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+
+installer:
+  model: "gpt-5.4-mini"
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.75
+    output: 4.5
+    cache_read: 0.075
+
+pentester:
+  model: "claude-sonnet-4-6"
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
