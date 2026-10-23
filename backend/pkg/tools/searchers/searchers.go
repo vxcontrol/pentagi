@@ -10,7 +10,8 @@
 //
 // This package must not import pentagi/pkg/tools (the orchestrator imports this
 // package). It depends only on neutral packages: config, database (for the
-// SearchengineType attribution enum), system (HTTP client), and observability.
+// SearchengineType attribution enum), system (HTTP client), markdown (code fences),
+// and observability.
 package searchers
 
 import (

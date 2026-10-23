@@ -647,6 +647,10 @@ func TestGraphitiSearch_FormatGraphiti_RendersTheWholeListingTheAgentReads(t *te
 		{Source: "pentester", SourceDescription: "nmap scan", Content: atCap},
 		{Source: "coder", SourceDescription: "exploit draft", Content: strings.Repeat("d", 201)},
 	}
+	fenced := []graphiti.EpisodeResult{{
+		Source: "pentester", SourceDescription: "nmap scan", Content: "a\n```\nb",
+		CreatedAt: time.Date(2026, 7, 24, 11, 50, 0, 0, time.UTC),
+	}}
 	one := []float64{0.9}
 
 	tests := []struct {
@@ -708,6 +712,33 @@ func TestGraphitiSearch_FormatGraphiti_RendersTheWholeListingTheAgentReads(t *te
 				"```",
 				longContent,
 				"```",
+				"",
+				"",
+			),
+		},
+		{
+			name: "temporal window results with a fence line in the content",
+			got: FormatGraphitiTemporalResults(&graphiti.TemporalSearchResponse{
+				Episodes: fenced, EpisodeScores: one, TimeWindow: window,
+			}, "open ports"),
+			want: graphitiSearchLines(
+				"# Temporal Search Results",
+				"",
+				"**Query:** open ports",
+				"",
+				"**Time Window:** 2026-07-24T11:53:34Z to 2026-07-25T11:53:34Z",
+				"",
+				"## Agent Responses & Tool Executions",
+				"",
+				"1. **pentester** (score: 0.900)",
+				"   - Description: nmap scan",
+				"   - Created: 2026-07-24T11:50:00Z",
+				"   - Content:",
+				"````",
+				"a",
+				"```",
+				"b",
+				"````",
 				"",
 				"",
 			),
@@ -834,6 +865,31 @@ func TestGraphitiSearch_FormatGraphiti_RendersTheWholeListingTheAgentReads(t *te
 			),
 		},
 		{
+			name: "episode context results with a fence line in the content",
+			got: FormatGraphitiEpisodeContextResults(&graphiti.EpisodeContextSearchResponse{
+				Episodes: fenced, RerankerScores: one,
+			}, "open ports"),
+			want: graphitiSearchLines(
+				"# Episode Context Results",
+				"",
+				"**Query:** open ports",
+				"",
+				"## Relevant Agent Activity",
+				"",
+				"1. **pentester** (relevance: 0.900)",
+				"   - Time: 2026-07-24T11:50:00Z",
+				"   - Description: nmap scan",
+				"   - Content:",
+				"````",
+				"a",
+				"```",
+				"b",
+				"````",
+				"",
+				"",
+			),
+		},
+		{
 			name: "successful tools results",
 			got: FormatGraphitiSuccessfulToolsResults(&graphiti.SuccessfulToolsSearchResponse{
 				Episodes: episodes, EpisodeScores: one, Edges: edges, EdgeMentionCounts: []float64{3},
@@ -863,6 +919,30 @@ func TestGraphitiSearch_FormatGraphiti_RendersTheWholeListingTheAgentReads(t *te
 				"",
 				"- **HAS_PORT** (mentions: 3): 10.0.0.5 exposes 443",
 				"- **RUNS**: 443 runs nginx",
+				"",
+			),
+		},
+		{
+			name: "successful tools results with a fence line in the output",
+			got: FormatGraphitiSuccessfulToolsResults(&graphiti.SuccessfulToolsSearchResponse{
+				Episodes: fenced, EpisodeScores: one,
+			}, "open ports"),
+			want: graphitiSearchLines(
+				"# Successful Tools & Techniques",
+				"",
+				"**Query:** open ports",
+				"",
+				"## Successful Executions",
+				"",
+				"1. **pentester** (score: 0.900)",
+				"   - Description: nmap scan",
+				"   - Command/Output:",
+				"````",
+				"a",
+				"```",
+				"b",
+				"````",
+				"",
 				"",
 			),
 		},

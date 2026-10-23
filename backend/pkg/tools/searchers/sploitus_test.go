@@ -20,7 +20,7 @@ func TestSploitus_Handle_PostsTheSearchAndFormatsTheExploits(t *testing.T) {
 			"score":9.8,
 			"published":"2024-01-15",
 			"language":"python",
-			"source":"exploit code here"
+			"source":"exploit code here\n\u0060\u0060\u0060"
 		}],
 		"exploits_total":42
 	}`}
@@ -60,6 +60,7 @@ func TestSploitus_Handle_PostsTheSearchAndFormatsTheExploits(t *testing.T) {
 		"**Query:** `nginx`",
 		"**Total matches on Sploitus:** 42",
 		"Test Exploit for nginx",
+		"\n**Source Preview:**\n````\nexploit code here\n```\n````\n",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("result misses %q: %q", want, got)

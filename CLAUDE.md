@@ -187,7 +187,7 @@ Where a test lives and what it is called decide whether anyone finds it again. E
 | `pkg/graphiti/` | HTTP client for the Graphiti knowledge-graph service. It does not speak Neo4j |
 | `pkg/observability/` | OpenTelemetry traces/metrics/logs, `langfuse/`, `profiling/` |
 | `pkg/flowfiles/`, `pkg/resources/` | Per-flow file tree and sandbox transfer; the user-level resource store |
-| `pkg/schema/`, `pkg/password/`, `pkg/system/`, `pkg/timezone/`, `pkg/version/`, `pkg/terminal/` | Validation plumbing; the password policy; shared HTTP client; IANA name resolution; link-time version; console output for the `cmd/*tester` CLIs |
+| `pkg/schema/`, `pkg/password/`, `pkg/system/`, `pkg/timezone/`, `pkg/version/`, `pkg/terminal/`, `pkg/markdown/` | Validation plumbing; the password policy; shared HTTP client; IANA name resolution; link-time version; console output for the `cmd/*tester` CLIs; code fences that cannot be closed early by their content |
 
 Migrations are `backend/migrations/sql/*.sql`, **embedded into the binary** and run by goose at startup — a new migration needs a rebuild, not just a restart. A failure aborts the boot.
 
