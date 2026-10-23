@@ -228,6 +228,7 @@ type BaseScreen struct {
 	// State
 	initialized  bool
 	hasChanges   bool
+	saveErr      error
 	focusedIndex int
 	showValues   bool
 
@@ -548,9 +549,12 @@ func (b *BaseScreen) updateFormContent() {
 	}
 
 	statusMessage := ""
-	if b.hasChanges {
+	switch {
+	case b.saveErr != nil:
+		statusMessage = b.styles.Error.Render(fmt.Sprintf(locale.UISaveFailed, b.saveErr))
+	case b.hasChanges:
 		statusMessage = b.styles.Warning.Render(locale.UIUnsavedChanges)
-	} else {
+	default:
 		statusMessage = b.styles.Success.Render(locale.UIConfigSaved)
 	}
 
@@ -774,6 +778,7 @@ func (b *BaseScreen) handleTabCompletion() {
 func (b *BaseScreen) resetForm() {
 	b.handler.HandleReset()
 	b.fields = b.handler.GetFormFields()
+	b.saveErr = nil
 	b.hasChanges = false
 	b.updateFormContent()
 }
@@ -782,9 +787,12 @@ func (b *BaseScreen) resetForm() {
 func (b *BaseScreen) saveConfiguration() tea.Cmd {
 	if err := b.handler.HandleSave(); err != nil {
 		logger.Errorf("[BaseScreen] SAVE: error: %v", err)
+		b.saveErr = err
+		b.updateViewports()
 		return nil
 	}
 
+	b.saveErr = nil
 	b.hasChanges = false
 	b.updateViewports()
 
@@ -795,7 +803,7 @@ func (b *BaseScreen) saveConfiguration() tea.Cmd {
 func (b *BaseScreen) saveAndReturn() tea.Cmd {
 	// save first
 	cmd := b.saveConfiguration()
-	if cmd != nil {
+	if cmd != nil || b.saveErr != nil {
 		return cmd
 	}
 

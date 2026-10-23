@@ -11,6 +11,7 @@ const (
 	UINotImplemented   = "Not implemented yet"
 	UIUnsavedChanges   = "Unsaved changes"
 	UIConfigSaved      = "Configuration saved"
+	UISaveFailed       = "Save failed: %v"
 
 	// Status labels
 	StatusEnabled       = "Enabled"
