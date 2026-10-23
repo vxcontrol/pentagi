@@ -5,6 +5,12 @@ import (
 	"strings"
 )
 
+const (
+	// taskTitleLimit is the length the task title prompt asks for and the fallback is cut to.
+	taskTitleLimit = 150
+	untitledTask   = "Untitled task"
+)
+
 const titleSpan = `[\p{L}\p{N}](?:[^*]*[^*\s\p{L}\p{N}]\*+)*(?:[^*]*[^*\s])?`
 
 var (
@@ -39,4 +45,19 @@ func normalizeTitle(answer string) string {
 		}
 	}
 	return titleEmphasis.ReplaceAllString(title, "$1$2$3$4")
+}
+
+// titleFromInput derives a title from the first non-blank line of input, cut to limit runes.
+func titleFromInput(input string, limit int, placeholder string) string {
+	for line := range strings.Lines(input) {
+		title := []rune(strings.Join(strings.Fields(line), " "))
+		if len(title) == 0 {
+			continue
+		}
+		if len(title) > limit {
+			title = append(title[:limit-1], '…')
+		}
+		return string(title)
+	}
+	return placeholder
 }
