@@ -651,6 +651,10 @@ The installer will:
 5. **Security Hardening**: Generate secure credentials and configure SSL certificates
 6. **Deployment**: Start PentAGI with docker-compose
 
+### ☁️ One-Click Deploy
+
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/PentaGI/)
+
 ### Current Web Settings Coverage
 
 The PentAGI web console already manages several settings areas after the server is up and running:
