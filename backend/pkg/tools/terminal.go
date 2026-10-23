@@ -444,7 +444,16 @@ func (t *terminal) readFileFromContainer(ctx context.Context, flowID int64, path
 	}
 	defer reader.Close()
 
+	// The per-file limit alone does not bound a directory read: every entry is
+	// appended to the same buffer, so a directory of files just under the limit
+	// grows the backend's memory without bound. The entry count and the total
+	// declared size get the same limit.
+	const maxReadFileSize int64 = 100 * 1024 * 1024 // 100 MB limit
+	const maxReadFileEntries = 1000
+
 	var buffer strings.Builder
+	var entries int
+	var totalSize int64
 	tarReader := tar.NewReader(reader)
 	for {
 		tarHeader, err := tarReader.Next()
@@ -459,18 +468,27 @@ func (t *terminal) readFileFromContainer(ctx context.Context, flowID int64, path
 			continue
 		}
 
+		entries++
+		if entries > maxReadFileEntries {
+			return "", fmt.Errorf("archive contains more than %d files, refusing to read it whole", maxReadFileEntries)
+		}
+
 		if stats.Mode.IsDir() {
 			buffer.WriteString("--------------------------------------------------\n")
 			fmt.Fprintf(&buffer, "'%s' file content (with size %d bytes) shown below:\n",
 				tarHeader.Name, tarHeader.Size)
 		}
 
-		const maxReadFileSize int64 = 100 * 1024 * 1024 // 100 MB limit
 		if tarHeader.Size > maxReadFileSize {
 			return "", fmt.Errorf("file '%s' size %d exceeds maximum allowed size %d", tarHeader.Name, tarHeader.Size, maxReadFileSize)
 		}
 		if tarHeader.Size < 0 {
 			return "", fmt.Errorf("file '%s' has invalid size %d", tarHeader.Name, tarHeader.Size)
+		}
+
+		totalSize += tarHeader.Size
+		if totalSize > maxReadFileSize {
+			return "", fmt.Errorf("total size of files in '%s' exceeds maximum allowed size %d", path, maxReadFileSize)
 		}
 
 		// Copied rather than read into a full-size buffer. tar.Reader.Read

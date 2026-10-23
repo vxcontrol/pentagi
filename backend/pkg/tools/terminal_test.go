@@ -291,6 +291,41 @@ func TestTerminal_ReadFile_RefusesWhatItCannotReadWhole(t *testing.T) {
 	}
 }
 
+func TestTerminal_ReadFile_RefusesADirectoryThatOnlyExceedsTheLimitInTotal(t *testing.T) {
+	chunk := string(bytes.Repeat([]byte("x"), 40<<20))
+	archive := terminalTar(t,
+		terminalTarEntry{name: "recon/", dir: true},
+		terminalTarEntry{name: "recon/a.txt", body: chunk},
+		terminalTarEntry{name: "recon/b.txt", body: chunk},
+		terminalTarEntry{name: "recon/c.txt", body: chunk},
+	)
+	dc := &fakeDockerClient{isRunning: true, archive: archive}
+	dc.stat = container.PathStat{Name: "recon", Mode: os.ModeDir | 0o755}
+
+	result, err := terminalFor(dc, &recordingTermLog{}).Handle(t.Context(),
+		FileToolName, json.RawMessage(`{"action":"read_file","path":"/work/recon","message":"m"}`))
+
+	require.NoError(t, err, "a tool failure is a soft (nil-error) response")
+	assert.Equal(t, "terminal tool 'file' handled with error: "+
+		"total size of files in '/work/recon' exceeds maximum allowed size 104857600", result)
+}
+
+func TestTerminal_ReadFile_RefusesAnArchiveWithTooManyFiles(t *testing.T) {
+	entries := []terminalTarEntry{{name: "recon/", dir: true}}
+	for i := range 1001 {
+		entries = append(entries, terminalTarEntry{name: fmt.Sprintf("recon/f%04d.txt", i), body: "x"})
+	}
+	dc := &fakeDockerClient{isRunning: true, archive: terminalTar(t, entries...)}
+	dc.stat = container.PathStat{Name: "recon", Mode: os.ModeDir | 0o755}
+
+	result, err := terminalFor(dc, &recordingTermLog{}).Handle(t.Context(),
+		FileToolName, json.RawMessage(`{"action":"read_file","path":"/work/recon","message":"m"}`))
+
+	require.NoError(t, err, "a tool failure is a soft (nil-error) response")
+	assert.Equal(t, "terminal tool 'file' handled with error: "+
+		"archive contains more than 1000 files, refusing to read it whole", result)
+}
+
 // validateFilePath lets both through, so the archive refuses them before anything is copied.
 func TestTerminal_WriteFile_RefusesANameTheArchiveCannotCarry(t *testing.T) {
 	tests := []struct {
