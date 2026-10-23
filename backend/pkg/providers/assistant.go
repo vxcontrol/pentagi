@@ -647,27 +647,22 @@ func (ap *assistantProvider) patchAssistantFlowSubtasks(
 		idsToDelete = append(idsToDelete, st.ID)
 	}
 
-	if len(idsToDelete) > 0 {
-		if err := db.DeleteSubtasks(ctx, idsToDelete); err != nil {
-			return fmt.Errorf("failed to delete subtasks for task %d: %w", taskID, err)
-		}
-		// The task worker for taskID (if currently loaded in memory) still holds
-		// SubtaskWorker objects for idsToDelete; without this it would later try
-		// to operate on rows that no longer exist (e.g. on flow Finish/Stop).
-		ap.flowWorker.InvalidateTaskSubtasks(ctx, taskID, idsToDelete)
-	}
-
 	// result contains only entries that were in patchableSubs (minus removed ones)
 	// plus any new entries from add operations — all safe to create unconditionally.
+	rows := make([]database.CreateSubtaskParams, 0, len(result))
 	for _, info := range result {
-		if _, err := db.CreateSubtask(ctx, database.CreateSubtaskParams{
+		rows = append(rows, database.CreateSubtaskParams{
 			Status:      database.SubtaskStatusCreated,
 			TaskID:      taskID,
 			Title:       info.Title,
 			Description: info.Description,
-		}); err != nil {
-			return fmt.Errorf("failed to create subtask %q for task %d: %w", info.Title, taskID, err)
-		}
+		})
+	}
+	if err := database.SaveSubtaskPlan(ctx, db, idsToDelete, rows); err != nil {
+		return fmt.Errorf("failed to save patched subtasks for task %d: %w", taskID, err)
+	}
+	if len(idsToDelete) > 0 {
+		ap.flowWorker.InvalidateTaskSubtasks(ctx, taskID, idsToDelete)
 	}
 
 	subtasksResult := convertSubtaskInfoPatch(result)
