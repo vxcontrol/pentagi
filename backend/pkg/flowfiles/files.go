@@ -29,6 +29,7 @@ const (
 	MaxUploadTotalSize   = 2 * 1024 * 1024 * 1024 // 2 GB
 	MaxUploadRequestSize = MaxUploadTotalSize + 64*1024*1024
 	MaxPullFiles         = 1000                   // files
+	MaxPullEntries       = 2 * MaxPullFiles       // includes directories and skipped entries
 	MaxPullTotalSize     = 2 * 1024 * 1024 * 1024 // 2 GB
 	MaxFileNameLength    = 255
 )
@@ -375,6 +376,7 @@ func WriteUploadsTar(w *io.PipeWriter, uploadDir string) error {
 func ExtractTar(r io.Reader, destDir string) error {
 	tr := tar.NewReader(r)
 	var filesCount int
+	var entriesCount int
 	var totalSize int64
 	for {
 		hdr, err := tr.Next()
@@ -383,6 +385,12 @@ func ExtractTar(r io.Reader, destDir string) error {
 		}
 		if err != nil {
 			return fmt.Errorf("failed to read tar entry: %w", err)
+		}
+		// Bound work even for directories, links, and rejected paths, which do
+		// not contribute to the regular-file count or total size limit.
+		entriesCount++
+		if entriesCount > MaxPullEntries {
+			return fmt.Errorf("tar archive exceeds maximum entry count of %d", MaxPullEntries)
 		}
 		if hdr.Typeflag == tar.TypeSymlink || hdr.Typeflag == tar.TypeLink {
 			continue

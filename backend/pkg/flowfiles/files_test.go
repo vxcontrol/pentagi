@@ -636,6 +636,33 @@ func TestFiles_ExtractTar_WritesOnlyRegularFilesInsideTheDestination(t *testing.
 	}
 }
 
+func TestFiles_ExtractTar_BoundsAllEntries(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		typeflag byte
+		prefix   string
+	}{
+		{name: "directories", typeflag: tar.TypeDir, prefix: "dir-"},
+		{name: "symlinks", typeflag: tar.TypeSymlink, prefix: "link-"},
+		{name: "rejected paths", typeflag: tar.TypeReg, prefix: "../../outside-"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			entries := make([]tarTestEntry, 0, MaxPullEntries+1)
+			for i := range MaxPullEntries + 1 {
+				entries = append(entries, tarTestEntry{
+					name: tc.prefix + strconv.Itoa(i), typeflag: tc.typeflag, linkname: "target",
+				})
+			}
+			dest := t.TempDir()
+			require.NoError(t, ExtractTar(buildTar(t, entries[:MaxPullEntries]), dest))
+			err := ExtractTar(buildTar(t, entries), dest)
+			require.ErrorContains(t, err, "maximum entry count")
+			_, err = os.Lstat(filepath.Join(dest, entries[MaxPullEntries].name))
+			require.ErrorIs(t, err, fs.ErrNotExist, "the excess entry must not be created")
+		})
+	}
+}
+
 func TestFiles_ZipRelativePaths_StoresEachPathUnderItsCacheName(t *testing.T) {
 	t.Run("files and directory contents with cache-relative names", func(t *testing.T) {
 		base := t.TempDir()
