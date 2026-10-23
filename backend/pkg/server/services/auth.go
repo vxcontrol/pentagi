@@ -714,8 +714,8 @@ func (s *AuthService) authLoginCallback(c *gin.Context, stateData map[string]str
 	if stateData["provider"] == "google" {
 		sameSiteMode = http.SameSiteNoneMode
 	}
-	s.setCallbackCookie(c.Writer, c.Request, s.stateCookieName(), "", 0, sameSiteMode)
-	s.setCallbackCookie(c.Writer, c.Request, s.nonceCookieName(), "", 0, sameSiteMode)
+	s.setCallbackCookie(c.Writer, c.Request, s.stateCookieName(), "", -1, sameSiteMode)
+	s.setCallbackCookie(c.Writer, c.Request, s.nonceCookieName(), "", -1, sameSiteMode)
 
 	logger.FromContext(c).
 		WithFields(logrus.Fields{
