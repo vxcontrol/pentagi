@@ -10,6 +10,8 @@ import (
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 
+	"github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vxcontrol/langchaingo/llms"
@@ -239,4 +241,60 @@ func TestRetry_RetryTransient_SetupCallIsNotAskedAgainAfterALocalRefusal(t *test
 	require.Error(t, err)
 	assert.ErrorAs(t, err, new(*llms.ErrStructuredOutputUnsupported))
 	assert.Equal(t, 1, prv.callCount, "a refusal the library decided locally must not be asked again")
+}
+
+func TestRetry_RetryTransient_LogsEachFailedAttempt(t *testing.T) {
+	hook := logtest.NewGlobal()
+	t.Cleanup(hook.Reset)
+
+	transient := errors.New("dial tcp 10.255.255.1:443: i/o timeout")
+	tests := []struct {
+		name     string
+		errs     []error
+		wantLogs []string
+	}{
+		{
+			name:     "every attempt fails",
+			errs:     []error{transient},
+			wantLogs: []string{"call failed, will retry", "call failed, will retry", "call failed, no attempts left"},
+		},
+		{
+			name:     "the second attempt succeeds",
+			errs:     []error{transient, nil},
+			wantLogs: []string{"call failed, will retry"},
+		},
+		{
+			name: "a deterministic failure is not retried, so nothing is logged here",
+			errs: []error{&reasoning.ErrThinkingRequiresStream{Model: "qwen3.6-35b-a3b"}},
+		},
+		{
+			name: "a canceled call is not logged as a failure",
+			errs: []error{context.Canceled},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hook.Reset()
+
+			calls := 0
+			_, _ = retryTransient(context.Background(), time.Millisecond, func() (string, error) {
+				calls++
+				return "ok", tt.errs[min(calls, len(tt.errs))-1]
+			})
+
+			var got []string
+			for i, entry := range hook.AllEntries() {
+				if _, ok := entry.Data["max_attempts"]; !ok {
+					continue
+				}
+				got = append(got, entry.Message)
+				assert.Equal(t, logrus.WarnLevel, entry.Level)
+				assert.Equal(t, len(got), entry.Data["attempt"], "entry %d", i)
+				assert.Equal(t, maxRetriesToCallSimpleChain, entry.Data["max_attempts"])
+				assert.Equal(t, transient, entry.Data[logrus.ErrorKey])
+			}
+			assert.Equal(t, tt.wantLogs, got)
+		})
+	}
 }
