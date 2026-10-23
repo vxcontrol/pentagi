@@ -793,6 +793,7 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 	ctx, _ = executorAgent.Observation(ctx)
 
 	performResult := PerformResultError
+	unverifiedDoneRejections := 0
 	cfg := tools.PrimaryExecutorConfig{
 		TaskID:    taskID,
 		SubtaskID: subtaskID,
@@ -818,6 +819,9 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 				if err := done.Validate(); err != nil {
 					loggerFunc.WithError(err).Warn("done result is incomplete")
 					return "", fmt.Errorf("failed to unmarshal done result: %w", err)
+				}
+				if err := fp.checkDoneEvidence(ctx, subtaskID, done, &unverifiedDoneRejections, loggerFunc); err != nil {
+					return "", err
 				}
 
 				loggerFunc = loggerFunc.WithFields(logrus.Fields{

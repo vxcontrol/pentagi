@@ -445,6 +445,14 @@ func truncateResult(result string) string {
 	)
 }
 
+// BarrierDeclinedError is returned by a barrier handler that refuses to end the chain:
+// the agent gets Reason back as the tool response and the chain keeps running.
+type BarrierDeclinedError struct {
+	Reason string
+}
+
+func (e *BarrierDeclinedError) Error() string { return e.Reason }
+
 func (ce *customExecutor) IsBarrierFunction(name string) bool {
 	_, ok := ce.barriers[name]
 	return ok

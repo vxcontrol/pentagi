@@ -214,6 +214,10 @@ func (fp *flowProvider) performAgentChain(
 			response, err := fp.execToolCall(
 				ctx, optAgentType, chainID, idx, result, monitor, detector, executor, taskID, subtaskID, chain,
 			)
+			declined := errors.As(err, new(*tools.BarrierDeclinedError))
+			if declined {
+				err = nil
+			}
 
 			if toolTypeMapping[funcName] != tools.AgentToolType {
 				fp.storeToolExecutionToGraphiti(
@@ -244,7 +248,7 @@ func (fp *flowProvider) performAgentChain(
 				return err
 			}
 
-			if executor.IsBarrierFunction(funcName) {
+			if executor.IsBarrierFunction(funcName) && !declined {
 				wantToStop = true
 			}
 		}
@@ -363,6 +367,13 @@ func (fp *flowProvider) execToolCall(
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				return "", err
+			}
+
+			var declined *tools.BarrierDeclinedError
+			if errors.As(err, &declined) {
+				// The barrier wants more work before it ends the chain: its reason
+				// is the answer, not a sign the arguments need fixing.
+				return declined.Reason, err
 			}
 
 			if errors.Is(err, tools.ErrFlowStateGuard) {
