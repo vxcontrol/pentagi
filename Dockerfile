@@ -171,6 +171,7 @@ COPY --from=frontend-compiler /licenses/frontend /opt/pentagi/licenses/frontend
 COPY examples/configs/atlas.provider.yml /opt/pentagi/conf/
 COPY examples/configs/azure-openai.provider.yml /opt/pentagi/conf/
 COPY examples/configs/bedrock-glm-flash.provider.yml /opt/pentagi/conf/
+COPY examples/configs/cheaperinference.provider.yml /opt/pentagi/conf/
 COPY examples/configs/custom-openai.provider.yml /opt/pentagi/conf/
 COPY examples/configs/deepinfra.provider.yml /opt/pentagi/conf/
 COPY examples/configs/deepseek.provider.yml /opt/pentagi/conf/
