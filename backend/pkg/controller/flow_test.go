@@ -29,17 +29,25 @@ type scriptedTasks struct {
 	createErr   error
 	createDelay time.Duration
 	createGate  chan struct{}
+	createFn    func(context.Context, string, FlowUpdater) (TaskWorker, error)
 }
 
 func (c *scriptedTasks) ListTasks(context.Context) []TaskWorker { return c.tasks }
 
-func (c *scriptedTasks) CreateTask(context.Context, string, FlowUpdater) (TaskWorker, error) {
+func (c *scriptedTasks) CreateTask(ctx context.Context, input string, updater FlowUpdater) (TaskWorker, error) {
 	if c.createGate != nil {
 		<-c.createGate
 	}
 	time.Sleep(c.createDelay)
+	if c.createFn != nil {
+		return c.createFn(ctx, input, updater)
+	}
 
 	return nil, c.createErr
+}
+
+func (c *scriptedTasks) CreateQueuedTask(ctx context.Context, input string, updater FlowUpdater, _ int64) (TaskWorker, error) {
+	return c.CreateTask(ctx, input, updater)
 }
 
 // scriptedTask is task 11: its write-up blocks until cancelled unless answer is set, and Finish reports the flow waiting.
@@ -284,6 +292,104 @@ func TestFlow_PutInput_RefusesInputAfterTheFlowFinished(t *testing.T) {
 		}, "an assistant's submit_flow_input can still hold the worker the user just finished")
 	}
 	assert.Zero(t, flowProvider.switches.Load(), "a finished flow does not have its provider switched by a late input")
+}
+
+func TestFlow_QueueInputUpdate_PersistsFIFOAndRecoversClaims(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	q := &createFakeQuerier{flow: database.Flow{ID: reservedFlowID, Status: database.FlowStatusRunning}}
+	fw := &flowWorker{
+		ctx:       ctx,
+		flowCtx:   &FlowContext{DB: q, FlowID: reservedFlowID},
+		queueWake: make(chan struct{}, 1),
+	}
+
+	first, err := fw.QueueInputUpdate(ctx, "include the new host")
+	require.NoError(t, err)
+	second, err := fw.QueueInputUpdate(ctx, "check the exposed service")
+	require.NoError(t, err)
+	assert.Less(t, first.ID, second.ID)
+	assert.Equal(t, "include the new host", first.Input)
+	assert.Equal(t, "check the exposed service", second.Input)
+	select {
+	case <-fw.queueWake:
+	default:
+		t.Fatal("queue insertion did not notify the flow worker")
+	}
+
+	claimed, err := q.ClaimNextFlowInputUpdate(ctx, reservedFlowID)
+	require.NoError(t, err)
+	assert.Equal(t, first.ID, claimed.ID)
+	require.NoError(t, q.RecoverFlowInputUpdates(ctx, reservedFlowID))
+	claimed, err = q.ClaimNextFlowInputUpdate(ctx, reservedFlowID)
+	require.NoError(t, err)
+	assert.Equal(t, first.ID, claimed.ID, "the first unfinished update is recovered before later updates")
+	require.NoError(t, q.UpdateFlowInputUpdateStatus(ctx, database.UpdateFlowInputUpdateStatusParams{
+		FlowID: reservedFlowID,
+		ID:     claimed.ID,
+		Status: database.FlowInputUpdateStatusCompleted,
+	}))
+	claimed, err = q.ClaimNextFlowInputUpdate(ctx, reservedFlowID)
+	require.NoError(t, err)
+	assert.Equal(t, second.ID, claimed.ID)
+}
+
+func TestFlow_ProcessQueuedInputs_ConsumesInFIFOOrderAtWorkerBoundary(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	q := &createFakeQuerier{flow: database.Flow{ID: reservedFlowID, Status: database.FlowStatusRunning}}
+	var got []string
+	tc := &scriptedTasks{createFn: func(_ context.Context, input string, updater FlowUpdater) (TaskWorker, error) {
+		got = append(got, input)
+		return &scriptedTask{updater: updater}, nil
+	}}
+	fw := &flowWorker{
+		tc:      tc,
+		ctx:     ctx,
+		taskMX:  &sync.Mutex{},
+		taskST:  func() {},
+		taskWG:  &sync.WaitGroup{},
+		taskCCH: make(chan struct{}),
+		flowCtx: &FlowContext{
+			DB:        q,
+			FlowID:    reservedFlowID,
+			Publisher: &cascadeFakePublisher{},
+		},
+		logger: logrus.WithField("flow_id", reservedFlowID),
+	}
+	_, err := fw.QueueInputUpdate(ctx, "first instruction")
+	require.NoError(t, err)
+	_, err = fw.QueueInputUpdate(ctx, "second instruction")
+	require.NoError(t, err)
+
+	fw.processQueuedInputs()
+	assert.Equal(t, []string{"first instruction", "second instruction"}, got)
+	q.mx.Lock()
+	defer q.mx.Unlock()
+	require.Len(t, q.inputUpdates, 2)
+	assert.Equal(t, database.FlowInputUpdateStatusCompleted, q.inputUpdates[0].Status)
+	assert.Equal(t, database.FlowInputUpdateStatusCompleted, q.inputUpdates[1].Status)
+}
+
+func TestFlow_QueueInputUpdate_RejectsBlankAndFinishedFlow(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		input  string
+		status database.FlowStatus
+		want   string
+	}{
+		{name: "blank", input: "  \n", status: database.FlowStatusRunning, want: "must not be empty"},
+		{name: "finished", input: "continue", status: database.FlowStatusFinished, want: "cannot accept queued input"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			q := &createFakeQuerier{flow: database.Flow{ID: reservedFlowID, Status: tc.status}}
+			fw := &flowWorker{ctx: context.Background(), flowCtx: &FlowContext{DB: q, FlowID: reservedFlowID}}
+			_, err := fw.QueueInputUpdate(context.Background(), tc.input)
+			require.ErrorContains(t, err, tc.want)
+			assert.Empty(t, q.inputUpdates)
+		})
+	}
 }
 
 func TestFlow_ReportFailure_TellsExactlyOneOfCallerAndMessageLog(t *testing.T) {

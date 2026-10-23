@@ -2,12 +2,14 @@ package controller
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -46,6 +48,7 @@ type FlowWorker interface {
 	ListAssistants(ctx context.Context) []AssistantWorker
 	ListTasks(ctx context.Context) []TaskWorker
 	PutInput(ctx context.Context, input string, prv provider.Provider, resources []database.UserResource) error
+	QueueInputUpdate(ctx context.Context, input string) (database.FlowInputUpdate, error)
 	PutResources(ctx context.Context, resources []database.UserResource) error
 	Finish(ctx context.Context) error
 	Stop(ctx context.Context) error
@@ -73,6 +76,7 @@ type flowWorker struct {
 	taskCMX   sync.Mutex
 	taskCCH   chan struct{}
 	input     chan flowInput
+	queueWake chan struct{}
 	flowCtx   *FlowContext
 	docker    docker.DockerClient
 	logger    *logrus.Entry
@@ -135,8 +139,13 @@ var ErrInputAccepted = errors.New("input accepted, still being processed")
 var ErrInputNotAccepted = errors.New("input was not accepted")
 
 type flowInput struct {
-	input string
-	reply *inputReply
+	input   string
+	queueID int64
+	reply   *inputReply
+}
+
+func (in flowInput) deliver(err error) bool {
+	return in.reply != nil && in.reply.deliver(err)
 }
 
 func reserveFlow(ctx context.Context, fwc newFlowWorkerCtx) (database.Flow, error) {
@@ -279,20 +288,21 @@ func buildFlowWorker(
 	ctx, cancel := context.WithCancel(context.Background())
 	ctx, _ = obs.Observer.NewObservation(ctx, langfuse.WithObservationTraceID(observation.TraceID()))
 	fw := &flowWorker{
-		tc:      NewTaskController(flowCtx),
-		wg:      &sync.WaitGroup{},
-		aws:     make(map[int64]AssistantWorker),
-		awsMX:   &sync.Mutex{},
-		cfg:     fwc.cfg,
-		ctx:     ctx,
-		cancel:  cancel,
-		taskMX:  &sync.Mutex{},
-		taskST:  func() {},
-		taskWG:  &sync.WaitGroup{},
-		taskCCH: make(chan struct{}),
-		input:   make(chan flowInput),
-		flowCtx: flowCtx,
-		docker:  fwc.docker,
+		tc:        NewTaskController(flowCtx),
+		wg:        &sync.WaitGroup{},
+		aws:       make(map[int64]AssistantWorker),
+		awsMX:     &sync.Mutex{},
+		cfg:       fwc.cfg,
+		ctx:       ctx,
+		cancel:    cancel,
+		taskMX:    &sync.Mutex{},
+		taskST:    func() {},
+		taskWG:    &sync.WaitGroup{},
+		taskCCH:   make(chan struct{}),
+		input:     make(chan flowInput),
+		queueWake: make(chan struct{}, 1),
+		flowCtx:   flowCtx,
+		docker:    fwc.docker,
 		logger: logrus.WithFields(logrus.Fields{
 			"flow_id":   flow.ID,
 			"user_id":   fwc.userID,
@@ -447,20 +457,21 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	ctx, cancel := context.WithCancel(context.Background())
 	ctx, _ = obs.Observer.NewObservation(ctx, langfuse.WithObservationTraceID(observation.TraceID()))
 	fw := &flowWorker{
-		tc:      NewTaskController(flowCtx),
-		wg:      &sync.WaitGroup{},
-		aws:     make(map[int64]AssistantWorker),
-		awsMX:   &sync.Mutex{},
-		cfg:     fwc.cfg,
-		ctx:     ctx,
-		cancel:  cancel,
-		taskMX:  &sync.Mutex{},
-		taskST:  func() {},
-		taskWG:  &sync.WaitGroup{},
-		taskCCH: make(chan struct{}),
-		input:   make(chan flowInput),
-		flowCtx: flowCtx,
-		docker:  fwc.docker,
+		tc:        NewTaskController(flowCtx),
+		wg:        &sync.WaitGroup{},
+		aws:       make(map[int64]AssistantWorker),
+		awsMX:     &sync.Mutex{},
+		cfg:       fwc.cfg,
+		ctx:       ctx,
+		cancel:    cancel,
+		taskMX:    &sync.Mutex{},
+		taskST:    func() {},
+		taskWG:    &sync.WaitGroup{},
+		taskCCH:   make(chan struct{}),
+		input:     make(chan flowInput),
+		queueWake: make(chan struct{}, 1),
+		flowCtx:   flowCtx,
+		docker:    fwc.docker,
 		logger: logrus.WithFields(logrus.Fields{
 			"flow_id":   flow.ID,
 			"user_id":   flow.UserID,
@@ -734,6 +745,34 @@ func (fw *flowWorker) PutInput(
 	}
 }
 
+// QueueInputUpdate persists a text instruction for the flow worker to consume
+// after its current task reaches a boundary. Queue records are scoped to this
+// flow and ordered by their database identity.
+func (fw *flowWorker) QueueInputUpdate(ctx context.Context, input string) (database.FlowInputUpdate, error) {
+	if strings.TrimSpace(input) == "" {
+		return database.FlowInputUpdate{}, fmt.Errorf("input must not be empty")
+	}
+	status, err := fw.GetStatus(ctx)
+	if err != nil {
+		return database.FlowInputUpdate{}, fmt.Errorf("failed to get flow status: %w", err)
+	}
+	if status == database.FlowStatusFinished || status == database.FlowStatusFailed {
+		return database.FlowInputUpdate{}, fmt.Errorf("flow is %q and cannot accept queued input", status)
+	}
+	update, err := fw.flowCtx.DB.CreateFlowInputUpdate(ctx, database.CreateFlowInputUpdateParams{
+		FlowID: fw.flowCtx.FlowID,
+		Input:  input,
+	})
+	if err != nil {
+		return database.FlowInputUpdate{}, fmt.Errorf("failed to queue flow input: %w", err)
+	}
+	select {
+	case fw.queueWake <- struct{}{}:
+	default:
+	}
+	return update, nil
+}
+
 func (fw *flowWorker) PutResources(ctx context.Context, dbResources []database.UserResource) error {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.flowWorker.PutResources")
 	defer span.End()
@@ -852,6 +891,9 @@ func (fw *flowWorker) Finish(ctx context.Context) error {
 				return fmt.Errorf("failed to finish task %d: %w", task.GetTaskID(), err)
 			}
 		}
+	}
+	if err := fw.flowCtx.DB.FailFlowInputUpdates(ctx, fw.flowCtx.FlowID); err != nil {
+		return fmt.Errorf("failed to fail queued inputs for flow %d: %w", fw.flowCtx.FlowID, err)
 	}
 
 	if err := fw.SetStatus(ctx, database.FlowStatusFinished); err != nil {
@@ -1287,6 +1329,11 @@ func (fw *flowWorker) WaitTaskCompletion(ctx context.Context) error {
 
 func (fw *flowWorker) worker() {
 	defer fw.wg.Done()
+	if fw.flowCtx != nil && fw.flowCtx.DB != nil {
+		if err := fw.flowCtx.DB.RecoverFlowInputUpdates(fw.ctx, fw.flowCtx.FlowID); err != nil {
+			fw.logger.WithError(err).Error("failed to recover queued flow inputs")
+		}
+	}
 
 	_, observation := obs.Observer.NewObservation(fw.ctx)
 
@@ -1331,6 +1378,9 @@ func (fw *flowWorker) worker() {
 		select {
 		case <-fw.ctx.Done():
 			return
+		case <-fw.queueWake:
+			fw.processQueuedInputs()
+			continue
 		case flin = <-fw.input:
 		}
 
@@ -1347,21 +1397,52 @@ func (fw *flowWorker) worker() {
 		} else {
 			getLogger(flin.input, task).Info("user input processed")
 		}
+		fw.processQueuedInputs()
+	}
+}
+
+func (fw *flowWorker) processQueuedInputs() {
+	if fw.flowCtx == nil || fw.flowCtx.DB == nil {
+		return
+	}
+	for fw.ctx.Err() == nil {
+		update, err := fw.flowCtx.DB.ClaimNextFlowInputUpdate(fw.ctx, fw.flowCtx.FlowID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return
+		}
+		if err != nil {
+			fw.logger.WithError(err).Error("failed to claim queued flow input")
+			return
+		}
+		_, processErr := fw.processInput(flowInput{input: update.Input, queueID: update.ID})
+		status := database.FlowInputUpdateStatusCompleted
+		if processErr != nil {
+			status = database.FlowInputUpdateStatusFailed
+			fw.logger.WithError(processErr).WithField("queue_id", update.ID).Error("queued flow input failed")
+		}
+		if err := fw.flowCtx.DB.UpdateFlowInputUpdateStatus(fw.ctx, database.UpdateFlowInputUpdateStatusParams{
+			FlowID: fw.flowCtx.FlowID,
+			ID:     update.ID,
+			Status: status,
+		}); err != nil {
+			fw.logger.WithError(err).WithField("queue_id", update.ID).Error("failed to record queued flow input outcome")
+			return
+		}
 	}
 }
 
 func (fw *flowWorker) processInput(flin flowInput) (TaskWorker, error) {
 	for _, task := range fw.tc.ListTasks(fw.ctx) {
-		if !task.IsCompleted() && task.IsWaiting() {
+		if flin.queueID == 0 && !task.IsCompleted() && task.IsWaiting() {
 			if err := task.PutInput(fw.ctx, flin.input); err != nil {
 				err = fmt.Errorf("failed to process input to task %d: %w", task.GetTaskID(), err)
-				if flin.reply.deliver(err) {
+				if flin.deliver(err) {
 					return nil, err
 				}
 				return nil, fw.reportFailure(task, flin.input, err)
 			}
 
-			flin.reply.deliver(nil)
+			flin.deliver(nil)
 			return task, fw.reportFailure(task, flin.input, fw.runTask("put input to task and run", flin.input, task))
 		}
 	}
@@ -1385,23 +1466,35 @@ func (fw *flowWorker) processInput(flin flowInput) (TaskWorker, error) {
 	defer fw.taskWG.Done()
 	defer fw.signalTaskComplete()
 
-	task, err := fw.tc.CreateTask(ctx, flin.input, fw)
+	var task TaskWorker
+	var err error
+	if flin.queueID > 0 {
+		queuedCreator, ok := fw.tc.(interface {
+			CreateQueuedTask(context.Context, string, FlowUpdater, int64) (TaskWorker, error)
+		})
+		if !ok {
+			return nil, fmt.Errorf("task controller does not support durable queued inputs")
+		}
+		task, err = queuedCreator.CreateQueuedTask(ctx, flin.input, fw, flin.queueID)
+	} else {
+		task, err = fw.tc.CreateTask(ctx, flin.input, fw)
+	}
 	if err != nil {
 		if errors.Is(err, context.Canceled) && fw.ctx.Err() == nil {
 			// CreateTask was cancelled by Stop() — not a fatal flow error.
 			// Keep the worker alive and return the flow to Waiting state.
-			flin.reply.deliver(nil)
+			flin.deliver(nil)
 			_ = fw.SetStatus(fw.ctx, database.FlowStatusWaiting)
 			return nil, nil
 		}
 		err = fmt.Errorf("failed to create task for flow %d: %w", fw.flowCtx.FlowID, err)
-		if flin.reply.deliver(err) {
+		if flin.deliver(err) {
 			return nil, err
 		}
 		return nil, fw.reportFailure(nil, flin.input, err)
 	}
 
-	flin.reply.deliver(nil)
+	flin.deliver(nil)
 	spanName := fmt.Sprintf("perform task %d: %s", task.GetTaskID(), task.GetTitle())
 	return task, fw.reportFailure(task, flin.input, fw.execTask(ctx, spanName, flin.input, task))
 }

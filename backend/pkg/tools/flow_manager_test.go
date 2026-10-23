@@ -62,6 +62,10 @@ func (m *flowManagerDB) GetFlowSubtasks(context.Context, int64) ([]database.Subt
 	return m.subtasks, m.subtasksErr
 }
 
+func (m *flowManagerDB) GetFlowInputUpdateCounts(context.Context, int64) (database.GetFlowInputUpdateCountsRow, error) {
+	return database.GetFlowInputUpdateCountsRow{}, nil
+}
+
 func (m *flowManagerDB) GetFlowTaskSubtasks(_ context.Context, arg database.GetFlowTaskSubtasksParams) ([]database.Subtask, error) {
 	m.filterTaskID = arg.TaskID
 	return m.taskSubs, m.taskSubsErr
@@ -1352,6 +1356,29 @@ func TestFlowManager_SubmitFlowInputTool_TellsWhatBecameOfTheInput(t *testing.T)
 				t.Errorf("expected %q in result, got: %s", tt.wantSubstr, result)
 			}
 		})
+	}
+}
+
+func TestFlowManager_SubmitFlowInputTool_QueuesUpdatesWhileAutomationRuns(t *testing.T) {
+	t.Parallel()
+	db := &flowManagerDB{taskReads: [][]database.Task{flowManagerTasks(database.TaskStatusRunning)}}
+	var queuedInput string
+	tool := NewSubmitFlowInputTool(1, db,
+		func(context.Context, string) error { return errors.New("unexpected direct input") },
+		func(_ context.Context, input string) (int64, error) { queuedInput = input; return 73, nil },
+	)
+	result, err := tool.Handle(context.Background(), SubmitFlowInputToolName,
+		json.RawMessage(`{"input":"add this data source","message":"queue follow-up"}`))
+	if err != nil {
+		t.Fatalf("queueing returned an error: %v", err)
+	}
+	if queuedInput != "add this data source" {
+		t.Fatalf("queued input = %q", queuedInput)
+	}
+	for _, want := range []string{"queued as update 73", "FIFO", "only text instructions"} {
+		if !strings.Contains(result, want) {
+			t.Errorf("result %q does not contain %q", result, want)
+		}
 	}
 }
 

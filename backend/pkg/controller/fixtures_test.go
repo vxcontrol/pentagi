@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"slices"
 	"sync"
@@ -59,6 +60,9 @@ func (w *noopFlowWorker) ListAssistants(context.Context) []AssistantWorker { ret
 func (w *noopFlowWorker) ListTasks(context.Context) []TaskWorker           { return nil }
 func (w *noopFlowWorker) PutInput(context.Context, string, provider.Provider, []database.UserResource) error {
 	return nil
+}
+func (w *noopFlowWorker) QueueInputUpdate(context.Context, string) (database.FlowInputUpdate, error) {
+	return database.FlowInputUpdate{}, nil
 }
 func (w *noopFlowWorker) PutResources(context.Context, []database.UserResource) error { return nil }
 func (w *noopFlowWorker) Finish(context.Context) error                                { return nil }
@@ -204,6 +208,10 @@ func (f *finishFakeQuerier) GetFlowTasks(ctx context.Context, _ int64) ([]databa
 	}
 
 	return f.tasks, nil
+}
+
+func (f *finishFakeQuerier) FailFlowInputUpdates(ctx context.Context, _ int64) error {
+	return ctx.Err()
 }
 
 func (f *finishFakeQuerier) GetTaskSubtasks(ctx context.Context, taskID int64) ([]database.Subtask, error) {
@@ -392,6 +400,81 @@ type createFakeQuerier struct {
 	assistantErr      error
 	assistantStatuses []database.AssistantStatus
 	containers        []database.Container
+	inputUpdates      []database.FlowInputUpdate
+	nextInputUpdateID int64
+}
+
+func (f *createFakeQuerier) CreateFlowInputUpdate(ctx context.Context, arg database.CreateFlowInputUpdateParams) (database.FlowInputUpdate, error) {
+	f.mx.Lock()
+	defer f.mx.Unlock()
+	if err := ctx.Err(); err != nil {
+		return database.FlowInputUpdate{}, err
+	}
+	if f.flow.ID != arg.FlowID {
+		return database.FlowInputUpdate{}, sql.ErrNoRows
+	}
+	f.nextInputUpdateID++
+	update := database.FlowInputUpdate{ID: f.nextInputUpdateID, FlowID: arg.FlowID, Input: arg.Input, Status: database.FlowInputUpdateStatusQueued}
+	f.inputUpdates = append(f.inputUpdates, update)
+	return update, nil
+}
+
+func (f *createFakeQuerier) ClaimNextFlowInputUpdate(ctx context.Context, flowID int64) (database.FlowInputUpdate, error) {
+	f.mx.Lock()
+	defer f.mx.Unlock()
+	if err := ctx.Err(); err != nil {
+		return database.FlowInputUpdate{}, err
+	}
+	for i := range f.inputUpdates {
+		if f.inputUpdates[i].FlowID == flowID && f.inputUpdates[i].Status == database.FlowInputUpdateStatusQueued {
+			f.inputUpdates[i].Status = database.FlowInputUpdateStatusProcessing
+			return f.inputUpdates[i], nil
+		}
+	}
+	return database.FlowInputUpdate{}, sql.ErrNoRows
+}
+
+func (f *createFakeQuerier) UpdateFlowInputUpdateStatus(ctx context.Context, arg database.UpdateFlowInputUpdateStatusParams) error {
+	f.mx.Lock()
+	defer f.mx.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	for i := range f.inputUpdates {
+		if f.inputUpdates[i].ID == arg.ID && f.inputUpdates[i].FlowID == arg.FlowID {
+			f.inputUpdates[i].Status = arg.Status
+			return nil
+		}
+	}
+	return sql.ErrNoRows
+}
+
+func (f *createFakeQuerier) RecoverFlowInputUpdates(ctx context.Context, flowID int64) error {
+	f.mx.Lock()
+	defer f.mx.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	for i := range f.inputUpdates {
+		if f.inputUpdates[i].FlowID == flowID && f.inputUpdates[i].Status == database.FlowInputUpdateStatusProcessing {
+			f.inputUpdates[i].Status = database.FlowInputUpdateStatusQueued
+		}
+	}
+	return nil
+}
+
+func (f *createFakeQuerier) FailFlowInputUpdates(ctx context.Context, flowID int64) error {
+	f.mx.Lock()
+	defer f.mx.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	for i := range f.inputUpdates {
+		if f.inputUpdates[i].FlowID == flowID && (f.inputUpdates[i].Status == database.FlowInputUpdateStatusQueued || f.inputUpdates[i].Status == database.FlowInputUpdateStatusProcessing) {
+			f.inputUpdates[i].Status = database.FlowInputUpdateStatusFailed
+		}
+	}
+	return nil
 }
 
 func (f *createFakeQuerier) CreateFlow(ctx context.Context, arg database.CreateFlowParams) (database.Flow, error) {
@@ -418,6 +501,18 @@ func (f *createFakeQuerier) GetFlow(context.Context, int64) (database.Flow, erro
 	time.Sleep(delay)
 
 	return flow, nil
+}
+
+func (f *createFakeQuerier) GetUserFlow(ctx context.Context, arg database.GetUserFlowParams) (database.Flow, error) {
+	if err := ctx.Err(); err != nil {
+		return database.Flow{}, err
+	}
+	f.mx.Lock()
+	defer f.mx.Unlock()
+	if f.flow.ID != arg.ID {
+		return database.Flow{}, sql.ErrNoRows
+	}
+	return f.flow, nil
 }
 
 func (f *createFakeQuerier) UpdateFlowStatus(

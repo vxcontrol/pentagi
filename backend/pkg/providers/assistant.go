@@ -46,6 +46,7 @@ type FlowWorker interface {
 	GetTitle() string
 	GetStatus(ctx context.Context) (database.FlowStatus, error)
 	PutInput(ctx context.Context, input string, prv provider.Provider, resources []database.UserResource) error
+	QueueInputUpdate(ctx context.Context, input string) (database.FlowInputUpdate, error)
 	PutResources(ctx context.Context, resources []database.UserResource) error
 	Stop(ctx context.Context) error
 	Rename(ctx context.Context, title string) error
@@ -424,10 +425,11 @@ func (ap *assistantProvider) buildFlowManagerHandlers() tools.FlowManagerHandler
 	}
 
 	return tools.FlowManagerHandlers{
-		StopFlow:      ap.stopAssistantFlow,
-		SendFlowInput: ap.sendAssistantFlowInput,
-		PatchSubtasks: ap.patchAssistantFlowSubtasks,
-		WaitFlow:      ap.waitAssistantFlowCompletion,
+		StopFlow:       ap.stopAssistantFlow,
+		SendFlowInput:  ap.sendAssistantFlowInput,
+		QueueFlowInput: ap.queueAssistantFlowInput,
+		PatchSubtasks:  ap.patchAssistantFlowSubtasks,
+		WaitFlow:       ap.waitAssistantFlowCompletion,
 	}
 }
 
@@ -567,6 +569,35 @@ func (ap *assistantProvider) sendAssistantFlowInput(ctx context.Context, input s
 	}
 
 	return nil
+}
+
+func (ap *assistantProvider) queueAssistantFlowInput(ctx context.Context, input string) (int64, error) {
+	if ap.flowWorker == nil {
+		return 0, fmt.Errorf("flow worker is not set")
+	}
+	update, err := ap.flowWorker.QueueInputUpdate(ctx, input)
+	level := langfuse.ObservationLevelDefault
+	status := "success"
+	if err != nil {
+		level = langfuse.ObservationLevelError
+		status = err.Error()
+	}
+	_, observation := obs.Observer.NewObservation(ctx)
+	observation.Event(
+		langfuse.WithEventName("queueing assistant input for flow"),
+		langfuse.WithEventInput(map[string]any{"input": input}),
+		langfuse.WithEventMetadata(langfuse.Metadata{
+			"assistant_id": ap.id,
+			"flow_id":      ap.fp.ID(),
+			"queue_id":     update.ID,
+		}),
+		langfuse.WithEventLevel(level),
+		langfuse.WithEventStatus(status),
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to queue flow input: %w", err)
+	}
+	return update.ID, nil
 }
 
 func (ap *assistantProvider) patchAssistantFlowSubtasks(

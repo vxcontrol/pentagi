@@ -53,6 +53,26 @@ func NewTaskWorker(
 	input string,
 	updater FlowUpdater,
 ) (_ TaskWorker, err error) {
+	return newTaskWorker(ctx, flowCtx, input, updater, 0)
+}
+
+func NewFlowInputUpdateTaskWorker(
+	ctx context.Context,
+	flowCtx *FlowContext,
+	input string,
+	updater FlowUpdater,
+	queueID int64,
+) (_ TaskWorker, err error) {
+	return newTaskWorker(ctx, flowCtx, input, updater, queueID)
+}
+
+func newTaskWorker(
+	ctx context.Context,
+	flowCtx *FlowContext,
+	input string,
+	updater FlowUpdater,
+	queueID int64,
+) (_ TaskWorker, err error) {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.NewTaskWorker")
 	defer span.End()
 
@@ -63,12 +83,29 @@ func NewTaskWorker(
 		return nil, fmt.Errorf("failed to get task title: %w", err)
 	}
 
-	task, err := flowCtx.DB.CreateTask(ctx, database.CreateTaskParams{
+	createTaskParams := database.CreateTaskParams{
 		Status: database.TaskStatusCreated,
 		Title:  title,
 		Input:  input,
 		FlowID: flowCtx.FlowID,
-	})
+	}
+	var task database.Task
+	if queueID > 0 {
+		created, createErr := flowCtx.DB.CreateTaskForFlowInputUpdate(ctx, database.CreateTaskForFlowInputUpdateParams{
+			Status: createTaskParams.Status,
+			Title:  createTaskParams.Title,
+			Input:  createTaskParams.Input,
+			FlowID: flowCtx.FlowID,
+			ID:     queueID,
+		})
+		err = createErr
+		task = database.Task{
+			ID: created.ID, Status: created.Status, Title: created.Title, Input: created.Input,
+			Result: created.Result, FlowID: created.FlowID, CreatedAt: created.CreatedAt, UpdatedAt: created.UpdatedAt,
+		}
+	} else {
+		task, err = flowCtx.DB.CreateTask(ctx, createTaskParams)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create task in DB: %w", err)
 	}

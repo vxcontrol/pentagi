@@ -9,6 +9,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/sqlc-dev/pqtype"
@@ -147,6 +148,25 @@ func (ns NullContainerType) Value() (driver.Value, error) {
 }
 
 type FlowStatus string
+
+type FlowInputUpdateStatus = string
+
+const (
+	FlowInputUpdateStatusQueued     FlowInputUpdateStatus = "queued"
+	FlowInputUpdateStatusProcessing FlowInputUpdateStatus = "processing"
+	FlowInputUpdateStatusCompleted  FlowInputUpdateStatus = "completed"
+	FlowInputUpdateStatusFailed     FlowInputUpdateStatus = "failed"
+)
+
+type FlowInputUpdate struct {
+	ID        int64                 `json:"id"`
+	FlowID    int64                 `json:"flow_id"`
+	TaskID    sql.NullInt64         `json:"task_id"`
+	Input     string                `json:"input"`
+	Status    FlowInputUpdateStatus `json:"status"`
+	CreatedAt time.Time             `json:"created_at"`
+	UpdatedAt time.Time             `json:"updated_at"`
+}
 
 const (
 	FlowStatusCreated  FlowStatus = "created"

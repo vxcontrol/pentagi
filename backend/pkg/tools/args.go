@@ -373,7 +373,7 @@ type StopFlowAction struct {
 
 // SubmitFlowInputAction defines arguments for the submit_flow_input tool.
 type SubmitFlowInputAction struct {
-	Input   string `json:"input" jsonschema:"required" jsonschema_description:"Engagement-log entry submitted on behalf of the engagement coordinator into the running automation. If a subtask is waiting at an 'ask' checkpoint, this is delivered as the coordinator's answer and execution resumes. If the flow is waiting with no active subtask, this becomes the goal for a new task — include complete context, targets, and constraints because the generator will decompose it into subtasks without further clarification. Written in the engagement language declared by your system prompt so downstream agents and the engagement record stay consistent."`
+	Input   string `json:"input" jsonschema:"required" jsonschema_description:"Text instruction for the automation. While a task is running, this is durably queued and processed in FIFO order after the active task reaches a safe boundary. Queued updates support text only; files and resources are not attached. If a subtask is waiting at an ask checkpoint, this answers it. If the flow is waiting with no active subtask, this becomes a new task goal. Include complete context, targets, and constraints. Written in the engagement language declared by your system prompt."`
 	Message string `json:"message" jsonschema:"required,title=Input message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary describing what is being submitted to the automation. Written in the engagement language declared by your system prompt."`
 }
 

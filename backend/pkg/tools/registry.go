@@ -431,10 +431,10 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 	},
 	SubmitFlowInputToolName: {
 		Name: SubmitFlowInputToolName,
-		Description: "Deliver text to the automation flow. The behaviour depends on the current flow state:\n" +
+		Description: "Deliver text to the automation flow. While a task is running, the input is durably queued and delivered after that task reaches a safe boundary; queued text is processed in FIFO order. Queued inputs are text-only and do not attach files or resources. When no task is running, the behaviour depends on the current flow state:\n" +
 			"  Subtask at 'ask' checkpoint — the text is delivered as the user's answer and the subtask resumes immediately.\n" +
 			"  Flow waiting with no active subtask — the text becomes the goal for a new task; the generator and refiner agents decompose it into a subtask list. Write a complete, detailed description with all context the automation needs.\n" +
-			"Returns an error if a task is currently running — cancel the running task first.",
+			"Returns a queue ID when accepted during active execution.",
 		Parameters: reflector.Reflect(&SubmitFlowInputAction{}),
 	},
 	PatchFlowSubtasksToolName: {

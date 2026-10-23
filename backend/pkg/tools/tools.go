@@ -227,10 +227,11 @@ type AssistantExecutorConfig struct {
 // FlowManagerHandlers holds optional callbacks for automation flow control.
 // Each non-nil handler enables its corresponding flow-management tool in the assistant executor.
 type FlowManagerHandlers struct {
-	StopFlow      func(ctx context.Context, reason string) error
-	SendFlowInput func(ctx context.Context, input string) error
-	PatchSubtasks func(ctx context.Context, taskID int64, patch SubtaskPatch) error
-	WaitFlow      func(ctx context.Context) error
+	StopFlow       func(ctx context.Context, reason string) error
+	SendFlowInput  func(ctx context.Context, input string) error
+	QueueFlowInput func(ctx context.Context, input string) (int64, error)
+	PatchSubtasks  func(ctx context.Context, taskID int64, patch SubtaskPatch) error
+	WaitFlow       func(ctx context.Context) error
 }
 
 type PrimaryExecutorConfig struct {
@@ -959,7 +960,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 	}
 
 	if cfg.FlowManager.SendFlowInput != nil {
-		submitInput := NewSubmitFlowInputTool(fte.flowID, fte.db, cfg.FlowManager.SendFlowInput)
+		submitInput := NewSubmitFlowInputTool(fte.flowID, fte.db, cfg.FlowManager.SendFlowInput, cfg.FlowManager.QueueFlowInput)
 		definitions = append(definitions, registryDefinitions[SubmitFlowInputToolName])
 		handlers[SubmitFlowInputToolName] = submitInput.Handle
 	}
