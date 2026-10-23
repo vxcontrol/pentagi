@@ -10,6 +10,7 @@ import (
 	"pentagi/pkg/database"
 	"pentagi/pkg/database/knowledge/limits"
 	"pentagi/pkg/graph/model"
+	"pentagi/pkg/markdown"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/providers/embeddings"
@@ -408,13 +409,5 @@ func (c *code) IsAvailable() bool {
 }
 
 func (c *code) renderCode(explanation, lang, code string) string {
-	buffer := strings.Builder{}
-	buffer.WriteString(explanation)
-	buffer.WriteString("\n\n")
-	buffer.WriteString("```")
-	buffer.WriteString(lang)
-	buffer.WriteString("\n")
-	buffer.WriteString(code)
-	buffer.WriteString("\n```")
-	return buffer.String()
+	return explanation + "\n\n" + markdown.CodeBlock(lang, code)
 }

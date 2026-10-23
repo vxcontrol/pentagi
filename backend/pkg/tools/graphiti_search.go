@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"pentagi/pkg/graphiti"
+	"pentagi/pkg/markdown"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 
@@ -672,7 +673,7 @@ func FormatGraphitiTemporalResults(
 			fmt.Fprintf(&builder, "%d. **%s**%s\n", i+1, episode.Source, score)
 			fmt.Fprintf(&builder, "   - Description: %s\n", episode.SourceDescription)
 			fmt.Fprintf(&builder, "   - Created: %s\n", episode.CreatedAt.Format(time.RFC3339))
-			fmt.Fprintf(&builder, "   - Content:\n```\n%s\n```\n", episode.Content)
+			fmt.Fprintf(&builder, "   - Content:\n%s\n", markdown.CodeBlock("", episode.Content))
 			builder.WriteString("\n")
 		}
 	}
@@ -808,7 +809,7 @@ func FormatGraphitiEpisodeContextResults(
 			fmt.Fprintf(&builder, "%d. **%s**%s\n", i+1, ep.Source, score)
 			fmt.Fprintf(&builder, "   - Time: %s\n", ep.CreatedAt.Format(time.RFC3339))
 			fmt.Fprintf(&builder, "   - Description: %s\n", ep.SourceDescription)
-			fmt.Fprintf(&builder, "   - Content:\n```\n%s\n```\n\n", ep.Content)
+			fmt.Fprintf(&builder, "   - Content:\n%s\n\n", markdown.CodeBlock("", ep.Content))
 		}
 	}
 
@@ -849,7 +850,7 @@ func FormatGraphitiSuccessfulToolsResults(
 			}
 			fmt.Fprintf(&builder, "%d. **%s**%s\n", i+1, ep.Source, score)
 			fmt.Fprintf(&builder, "   - Description: %s\n", ep.SourceDescription)
-			fmt.Fprintf(&builder, "   - Command/Output:\n```\n%s\n```\n\n", ep.Content)
+			fmt.Fprintf(&builder, "   - Command/Output:\n%s\n\n", markdown.CodeBlock("", ep.Content))
 		}
 	}
 

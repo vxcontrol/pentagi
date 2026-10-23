@@ -12,6 +12,7 @@ import (
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
+	"pentagi/pkg/markdown"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/system"
@@ -329,7 +330,7 @@ func formatSploitusResults(query, exploitType string, limit int, resp sploitusRe
 				if len(sourcePreview) > maxSourceSize {
 					sourcePreview = sourcePreview[:maxSourceSize] + "\n... [source truncated, exceeded 50 KB limit]"
 				}
-				fmt.Fprintf(&itemBuilder, "\n**Source Preview:**\n```\n%s\n```\n", sourcePreview)
+				fmt.Fprintf(&itemBuilder, "\n**Source Preview:**\n%s\n", markdown.CodeBlock("", sourcePreview))
 			}
 			itemBuilder.WriteString("\n---\n\n")
 

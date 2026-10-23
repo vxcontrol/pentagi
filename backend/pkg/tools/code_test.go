@@ -310,6 +310,9 @@ func TestCode_Handle_StoresTheWholeSampleAndEmbedsWhatFits(t *testing.T) {
 		},
 		"a sample beyond the embedding limit": {code: "print('x')", limit: 8, want: sample, embedded: "e\n\n```py"},
 		"no embedding limit":                  {code: "print('x')", limit: 0, want: sample, embedded: sample},
+		"a sample whose code holds a fence line": {
+			code: "a\n```\nb", want: "e\n\n````python\na\n```\nb\n````",
+		},
 		"no embedder of its own": {
 			code: "print('x')", limit: 8, noEmbedder: true, viaStore: true, want: sample, embedded: sample,
 		},
