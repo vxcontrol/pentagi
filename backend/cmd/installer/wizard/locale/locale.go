@@ -25,6 +25,7 @@ const (
 	MessageSearchEnginesConfigured = "✓ %d search engines configured"
 	MessageDockerConfigured        = "✓ Docker environment configured"
 	MessageDockerNotConfigured     = "⚠ Docker environment not configured"
+	MessageExistingDatabaseReused  = "⚠ The existing PentAGI database will be reused, with its accounts, passwords and flows. Purge PentAGI or Factory Reset removes it"
 )
 
 // Legend constants

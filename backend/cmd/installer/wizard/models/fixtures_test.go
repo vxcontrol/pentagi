@@ -1,11 +1,32 @@
 package models
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"pentagi/cmd/installer/checker"
+	"pentagi/cmd/installer/files"
+	"pentagi/cmd/installer/state"
+	"pentagi/cmd/installer/wizard/controller"
 )
 
 const providerFormPrefix = "llm_provider_form§"
+
+// newTestController is a controller over an empty env file that sees result as the last check.
+func newTestController(t *testing.T, result checker.CheckResult) controller.Controller {
+	t.Helper()
+	envPath := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(envPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.NewState(envPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return controller.NewController(st, files.NewFiles(), result)
+}
 
 func contains(t *testing.T, document, want, why string) {
 	t.Helper()

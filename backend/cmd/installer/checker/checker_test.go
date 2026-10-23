@@ -65,6 +65,60 @@ func TestChecker_NeverClaimsExternalForAStackThatIsNotConnected(t *testing.T) {
 	}
 }
 
+func TestChecker_CanFactoryReset_OffersToRemoveVolumesThatOutlivedTheirContainer(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		result CheckResult
+		want   bool
+	}{
+		{"volumes left behind by a removed container", CheckResult{PentagiVolumesExist: true}, true},
+		{"volumes of an installed container", CheckResult{PentagiVolumesExist: true, PentagiInstalled: true}, true},
+		{"no volumes and no container", CheckResult{}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.result.CanFactoryReset(); got != tt.want {
+				t.Errorf("CanFactoryReset() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestChecker_CanPurgeAll_OffersToRemoveVolumesThatOutlivedTheirContainer(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		result CheckResult
+		want   bool
+	}{
+		{"volumes left behind by a removed container", CheckResult{PentagiVolumesExist: true}, true},
+		{"volumes of an installed container", CheckResult{PentagiVolumesExist: true, PentagiInstalled: true}, true},
+		{"no volumes and no container", CheckResult{}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.result.CanPurgeAll(); got != tt.want {
+				t.Errorf("CanPurgeAll() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestChecker_CanRemoveAll_IgnoresVolumesThatOutlivedTheirContainer(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		result CheckResult
+		want   bool
+	}{
+		{"volumes left behind by a removed container", CheckResult{PentagiVolumesExist: true}, false},
+		{"volumes of an installed container", CheckResult{PentagiVolumesExist: true, PentagiInstalled: true}, true},
+		{"no volumes and no container", CheckResult{}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.result.CanRemoveAll(); got != tt.want {
+				t.Errorf("CanRemoveAll() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestChecker_GatherPentagiInfo_LooksForTheExtractedStackBesideTheEnvFile(t *testing.T) {
 	tests := []struct {
 		name              string

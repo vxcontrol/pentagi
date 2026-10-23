@@ -148,6 +148,12 @@ func (m *ProcessorOperationFormModel) GetCurrentConfiguration() string {
 		sections = append(sections, planned)
 	}
 
+	c := m.GetController().GetChecker()
+	if m.operation == processor.ProcessorOperationInstall && c.PentagiVolumesExist && !c.PentagiInstalled {
+		sections = append(sections, "")
+		sections = append(sections, m.GetStyles().Warning.Render(locale.MessageExistingDatabaseReused))
+	}
+
 	if m.operationInfo.requiresConfirmation {
 		// static notice without hotkeys; footer and prompt render exact keys
 		sections = append(sections, "")
