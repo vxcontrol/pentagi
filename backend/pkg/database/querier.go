@@ -29,6 +29,9 @@ type Querier interface {
 	CreateContainer(ctx context.Context, arg CreateContainerParams) (Container, error)
 	CreateFlow(ctx context.Context, arg CreateFlowParams) (Flow, error)
 	CreateFlowTemplate(ctx context.Context, arg CreateFlowTemplateParams) (FlowTemplate, error)
+	// A headless flow never runs the agent loop, so model/provider columns carry
+	// inert placeholders rather than a real LLM configuration.
+	CreateHeadlessFlow(ctx context.Context, arg CreateHeadlessFlowParams) (Flow, error)
 	CreateMsgChain(ctx context.Context, arg CreateMsgChainParams) (Msgchain, error)
 	CreateMsgLog(ctx context.Context, arg CreateMsgLogParams) (Msglog, error)
 	CreateProvider(ctx context.Context, arg CreateProviderParams) (Provider, error)
@@ -224,6 +227,8 @@ type Querier interface {
 	GetUserFlowTermLogs(ctx context.Context, arg GetUserFlowTermLogsParams) ([]Termlog, error)
 	GetUserFlowVectorStoreLogs(ctx context.Context, arg GetUserFlowVectorStoreLogsParams) ([]Vecstorelog, error)
 	GetUserFlows(ctx context.Context, userID int64) ([]Flow, error)
+	GetUserHeadlessFlow(ctx context.Context, arg GetUserHeadlessFlowParams) (Flow, error)
+	GetUserHeadlessFlows(ctx context.Context, userID int64) ([]Flow, error)
 	// Fetch a single knowledge document by UUID, scoped to a specific user.
 	GetUserKnowledgeDocument(ctx context.Context, arg GetUserKnowledgeDocumentParams) (GetUserKnowledgeDocumentRow, error)
 	GetUserPreferencesByUserID(ctx context.Context, userID int64) (UserPreference, error)

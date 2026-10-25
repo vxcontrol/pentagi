@@ -572,6 +572,17 @@ definitions:
     - doc_type
     - question
     type: object
+  models.CreateSandbox:
+    properties:
+      image:
+        example: vxcontrol/kali-linux
+        maxLength: 255
+        type: string
+      title:
+        example: ad-hoc recon
+        maxLength: 70
+        type: string
+    type: object
   models.DailyFlowsStats:
     properties:
       date:
@@ -623,6 +634,8 @@ definitions:
         type: string
       functions:
         $ref: '#/definitions/tools.Functions'
+      headless:
+        type: boolean
       id:
         minimum: 0
         type: integer
@@ -730,6 +743,8 @@ definitions:
         type: string
       functions:
         $ref: '#/definitions/tools.Functions'
+      headless:
+        type: boolean
       id:
         minimum: 0
         type: integer
@@ -1285,6 +1300,34 @@ definitions:
     required:
     - name
     - privileges
+    type: object
+  models.SandboxExec:
+    properties:
+      cwd:
+        type: string
+      detach:
+        example: false
+        type: boolean
+      input:
+        example: nmap -sV 10.0.0.5
+        type: string
+      timeout:
+        example: 60
+        maximum: 10800
+        minimum: 0
+        type: integer
+    required:
+    - input
+    type: object
+  models.SandboxFileWrite:
+    properties:
+      content:
+        type: string
+      path:
+        example: /work/notes.txt
+        type: string
+    required:
+    - path
     type: object
   models.Screenshot:
     properties:
@@ -6160,6 +6203,230 @@ paths:
       summary: Retrieve role by id
       tags:
       - Roles
+  /sandboxes/:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: sandbox model to create
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateSandbox'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: sandbox created successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Flow'
+              type: object
+        "400":
+          description: invalid sandbox request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: creating sandbox not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on creating sandbox
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a headless Docker sandbox with no agent loop and no LLM provider
+      tags:
+      - Sandboxes
+  /sandboxes/{sandboxID}:
+    delete:
+      parameters:
+      - description: sandbox id
+        in: path
+        minimum: 0
+        name: sandboxID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: sandbox stopped successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Flow'
+              type: object
+        "403":
+          description: stopping sandbox not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: sandbox not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on stopping sandbox
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Stop a headless sandbox and remove its container
+      tags:
+      - Sandboxes
+  /sandboxes/{sandboxID}/exec:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: sandbox id
+        in: path
+        minimum: 0
+        name: sandboxID
+        required: true
+        type: integer
+      - description: command to run
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.SandboxExec'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: command output
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  type: string
+              type: object
+        "400":
+          description: invalid exec request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: executing in sandbox not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: sandbox not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on executing in sandbox
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Run a command inside a headless sandbox
+      tags:
+      - Sandboxes
+  /sandboxes/{sandboxID}/file:
+    get:
+      parameters:
+      - description: sandbox id
+        in: path
+        minimum: 0
+        name: sandboxID
+        required: true
+        type: integer
+      - description: absolute path inside the container
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: file content
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  type: string
+              type: object
+        "400":
+          description: invalid path
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: reading sandbox file not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: sandbox not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on reading sandbox file
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Read a file from a headless sandbox
+      tags:
+      - Sandboxes
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: sandbox id
+        in: path
+        minimum: 0
+        name: sandboxID
+        required: true
+        type: integer
+      - description: file to write
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.SandboxFileWrite'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: write result
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  type: string
+              type: object
+        "400":
+          description: invalid write request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: writing sandbox file not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: sandbox not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on writing sandbox file
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Write a file into a headless sandbox
+      tags:
+      - Sandboxes
   /screenshots/:
     get:
       parameters:

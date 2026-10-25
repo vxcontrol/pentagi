@@ -35,6 +35,30 @@ VALUES (
 )
 RETURNING *;
 
+-- name: CreateHeadlessFlow :one
+-- A headless flow never runs the agent loop, so model/provider columns carry
+-- inert placeholders rather than a real LLM configuration.
+INSERT INTO flows (
+  title, status, model, model_provider_name, model_provider_type, language, tool_call_id_template, functions, user_id, headless
+)
+VALUES (
+  $1, $2, 'headless', 'headless', 'custom', 'English', 'headless', '{}', $3, true
+)
+RETURNING *;
+
+-- name: GetUserHeadlessFlow :one
+SELECT
+  f.*
+FROM flows f
+WHERE f.id = $1 AND f.user_id = $2 AND f.headless AND f.deleted_at IS NULL;
+
+-- name: GetUserHeadlessFlows :many
+SELECT
+  f.*
+FROM flows f
+WHERE f.user_id = $1 AND f.headless AND f.deleted_at IS NULL
+ORDER BY f.created_at DESC;
+
 -- name: UpdateFlow :one
 UPDATE flows
 SET title = $1, model = $2, language = $3, tool_call_id_template = $4, functions = $5, trace_id = $6

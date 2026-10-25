@@ -1,0 +1,12 @@
+{
+  "name": "pentagi-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "pentagi-mcp": "server.mjs" },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "zod": "^3.25.0"
+  }
+}

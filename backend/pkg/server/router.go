@@ -212,6 +212,7 @@ func NewRouter(
 	taskService := services.NewTaskService(orm)
 	subtaskService := services.NewSubtaskService(orm)
 	containerService := services.NewContainerService(orm)
+	sandboxService := services.NewSandboxService(orm, db, dockerClient, cfg, subscriptions)
 	toolcallService := services.NewToolcallService(orm)
 	assistantService := services.NewAssistantService(orm, providers, controller, subscriptions)
 	agentlogService := services.NewAgentlogService(orm)
@@ -327,6 +328,7 @@ func NewRouter(
 		provider:     providerService,
 		resource:     resourceService,
 		role:         roleService,
+		sandbox:      sandboxService,
 		screenshot:   screenshotService,
 		searchlog:    searchlogService,
 		settings:     settingsService,
@@ -461,6 +463,7 @@ type privateServices struct {
 	provider     *services.ProviderService
 	resource     *services.ResourceService
 	role         *services.RoleService
+	sandbox      *services.SandboxService
 	screenshot   *services.ScreenshotService
 	searchlog    *services.SearchlogService
 	settings     *services.SettingsService
@@ -496,6 +499,7 @@ func registerPrivateRoutes(tokenTier, userTier *gin.RouterGroup, svc privateServ
 	setTasksGroup(tokenTier, svc.task)
 	setSubtasksGroup(tokenTier, svc.subtask)
 	setContainersGroup(tokenTier, svc.container)
+	setSandboxesGroup(tokenTier, svc.sandbox)
 	setToolcallsGroup(tokenTier, svc.toolcall)
 	setAssistantsGroup(tokenTier, svc.assistant)
 	setAgentlogsGroup(tokenTier, svc.agentlog)
@@ -580,6 +584,25 @@ func setFlowFilesGroup(parent *gin.RouterGroup, svc *services.FlowFileService) {
 		flowFilesGroup.POST("/pull", svc.PullFlowFiles)
 		flowFilesGroup.POST("/resources", svc.AddResourcesToFlow)
 		flowFilesGroup.POST("/to-resources", svc.AddResourceFromFlow)
+	}
+}
+
+func setSandboxesGroup(parent *gin.RouterGroup, svc *services.SandboxService) {
+	sandboxCreateGroup := parent.Group("/sandboxes")
+	{
+		sandboxCreateGroup.POST("/", svc.CreateSandbox)
+	}
+
+	sandboxDeleteGroup := parent.Group("/sandboxes")
+	{
+		sandboxDeleteGroup.DELETE("/:sandboxID", svc.DeleteSandbox)
+	}
+
+	sandboxGroup := parent.Group("/sandboxes/:sandboxID")
+	{
+		sandboxGroup.POST("/exec", svc.ExecSandbox)
+		sandboxGroup.GET("/file", svc.GetSandboxFile)
+		sandboxGroup.PUT("/file", svc.PutSandboxFile)
 	}
 }
 

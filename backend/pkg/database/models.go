@@ -951,6 +951,7 @@ type Flow struct {
 	TraceID            sql.NullString  `json:"trace_id"`
 	ModelProviderType  ProviderType    `json:"model_provider_type"`
 	ToolCallIDTemplate string          `json:"tool_call_id_template"`
+	Headless           bool            `json:"headless"`
 }
 
 type FlowTemplate struct {

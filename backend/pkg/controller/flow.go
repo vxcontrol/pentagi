@@ -340,6 +340,13 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.LoadFlowWorker")
 	defer span.End()
 
+	if flow.Headless {
+		// A headless flow never had a FlowWorker: its sandbox is driven directly
+		// through the /sandboxes endpoints, with no agent loop and no provider
+		// to resolve, so there is nothing here to rebuild on restart.
+		return nil, fmt.Errorf("flow %d is headless: loading aborted: %w", flow.ID, ErrNothingToLoad)
+	}
+
 	switch flow.Status {
 	case database.FlowStatusRunning, database.FlowStatusWaiting:
 	default:

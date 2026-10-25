@@ -6172,6 +6172,377 @@ const docTemplate = `{
                 }
             }
         },
+        "/sandboxes/": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sandboxes"
+                ],
+                "summary": "Create a headless Docker sandbox with no agent loop and no LLM provider",
+                "parameters": [
+                    {
+                        "description": "sandbox model to create",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CreateSandbox"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "sandbox created successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.Flow"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid sandbox request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "creating sandbox not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on creating sandbox",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sandboxes/{sandboxID}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sandboxes"
+                ],
+                "summary": "Stop a headless sandbox and remove its container",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "sandbox id",
+                        "name": "sandboxID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "sandbox stopped successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.Flow"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "stopping sandbox not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "sandbox not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on stopping sandbox",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sandboxes/{sandboxID}/exec": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sandboxes"
+                ],
+                "summary": "Run a command inside a headless sandbox",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "sandbox id",
+                        "name": "sandboxID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "command to run",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.SandboxExec"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "command output",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid exec request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "executing in sandbox not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "sandbox not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on executing in sandbox",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sandboxes/{sandboxID}/file": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sandboxes"
+                ],
+                "summary": "Read a file from a headless sandbox",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "sandbox id",
+                        "name": "sandboxID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "absolute path inside the container",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "file content",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid path",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "reading sandbox file not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "sandbox not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on reading sandbox file",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sandboxes"
+                ],
+                "summary": "Write a file into a headless sandbox",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "sandbox id",
+                        "name": "sandboxID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "file to write",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.SandboxFileWrite"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "write result",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid write request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "writing sandbox file not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "sandbox not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on writing sandbox file",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/screenshots/": {
             "get": {
                 "security": [
@@ -8556,6 +8927,21 @@ const docTemplate = `{
                 }
             }
         },
+        "models.CreateSandbox": {
+            "type": "object",
+            "properties": {
+                "image": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "example": "vxcontrol/kali-linux"
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 70,
+                    "example": "ad-hoc recon"
+                }
+            }
+        },
         "models.DailyFlowsStats": {
             "type": "object",
             "required": [
@@ -8640,6 +9026,9 @@ const docTemplate = `{
                 },
                 "functions": {
                     "$ref": "#/definitions/tools.Functions"
+                },
+                "headless": {
+                    "type": "boolean"
                 },
                 "id": {
                     "type": "integer",
@@ -8793,6 +9182,9 @@ const docTemplate = `{
                 },
                 "functions": {
                     "$ref": "#/definitions/tools.Functions"
+                },
+                "headless": {
+                    "type": "boolean"
                 },
                 "id": {
                     "type": "integer",
@@ -9567,6 +9959,46 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/models.Privilege"
                     }
+                }
+            }
+        },
+        "models.SandboxExec": {
+            "type": "object",
+            "required": [
+                "input"
+            ],
+            "properties": {
+                "cwd": {
+                    "type": "string"
+                },
+                "detach": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "input": {
+                    "type": "string",
+                    "example": "nmap -sV 10.0.0.5"
+                },
+                "timeout": {
+                    "type": "integer",
+                    "maximum": 10800,
+                    "minimum": 0,
+                    "example": 60
+                }
+            }
+        },
+        "models.SandboxFileWrite": {
+            "type": "object",
+            "required": [
+                "path"
+            ],
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string",
+                    "example": "/work/notes.txt"
                 }
             }
         },

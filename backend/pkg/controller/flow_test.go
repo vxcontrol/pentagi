@@ -174,6 +174,20 @@ type lifecycleFakeAssistant struct {
 
 func (a *lifecycleFakeAssistant) GetAssistantID() int64 { return a.id }
 
+func TestLoadFlowWorker_HeadlessFlow_SkipsReconstruction(t *testing.T) {
+	t.Parallel()
+
+	flow := database.Flow{ID: 7, Status: database.FlowStatusRunning, Headless: true}
+
+	// A zero-value flowWorkerCtx has a nil db/docker/providers: if the headless
+	// check were removed, the normal running-flow path would dereference one of
+	// them before returning, so this also proves the guard runs first.
+	fw, err := LoadFlowWorker(context.Background(), flow, flowWorkerCtx{})
+
+	assert.Nil(t, fw)
+	assert.ErrorIs(t, err, ErrNothingToLoad)
+}
+
 func TestFlow_AddAssistant_RefusesAFinishedFlow(t *testing.T) {
 	t.Parallel()
 

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"pentagi/pkg/providers/provider"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -34,6 +36,10 @@ func TestFlows_Valid_RefusesExactlyTheInvalidField(t *testing.T) {
 		{"a flow in an unknown status", modelsWith(modelsFlow(), func(f *Flow) { f.Status = "invalid" }), "Flow.Status:valid"},
 		{"a flow of an unknown provider type", modelsWith(modelsFlow(), func(f *Flow) { f.ModelProviderType = "invalid" }),
 			"Flow.ModelProviderType:valid"},
+		{"a headless sandbox's flow row", modelsWith(modelsFlow(), func(f *Flow) {
+			f.Model, f.ModelProviderName, f.Language, f.ToolCallIDTemplate = "headless", "headless", "English", "headless"
+			f.ModelProviderType, f.Headless = ProviderType(provider.ProviderCustom), true
+		}), ""},
 
 		{"a flow request", CreateFlow{Input: "scan target", Provider: "openai"}, ""},
 		{"a flow request without input", CreateFlow{Provider: "openai"}, "CreateFlow.Input:required"},
