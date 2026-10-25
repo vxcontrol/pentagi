@@ -116,3 +116,48 @@ func TestTable_Query_ReadsTheTableItWasGivenNotTheModelsOwn(t *testing.T) {
 		t.Errorf("Query counted %d and read %v, want the one row 7 of table_given_rows", total, rows)
 	}
 }
+
+func TestTable_DataFilter_LowercasesTextValuesForEqualsOperators(t *testing.T) {
+	tests := []struct {
+		name     string
+		operator string
+		value    any
+		want     any
+	}{
+		{name: "equals", operator: "=", value: "Recon Example", want: "recon example"},
+		{name: "not equals", operator: "!=", value: "Recon Example", want: "recon example"},
+		{name: "like keeps wildcards", operator: "like", value: "Recon", want: "%recon%"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []any
+			mappers := map[string]any{
+				"title": func(q *TableQuery, db *gorm.DB, value any) *gorm.DB {
+					got = append(got, value)
+					return db
+				},
+			}
+			query := TableQuery{
+				Page: 1, Size: 5, Type: "filter",
+				Filters: []TableFilter{{Field: "title", Operator: tt.operator, Value: tt.value}},
+			}
+			if err := query.Init("flows", mappers); err != nil {
+				t.Fatalf("Init: %v", err)
+			}
+			db, err := gorm.Open("sqlite3", ":memory:")
+			if err != nil {
+				t.Fatalf("open sqlite: %v", err)
+			}
+			t.Cleanup(func() { db.Close() })
+			db.DB().SetMaxOpenConns(1)
+			query.DataFilter()(db.NewScope(nil).DB())
+			if len(got) != 1 {
+				t.Fatalf("mapper saw %d values, want 1", len(got))
+			}
+			if !reflect.DeepEqual(got[0], tt.want) {
+				t.Errorf("filter value = %v, want %v", got[0], tt.want)
+			}
+		})
+	}
+}
