@@ -256,9 +256,12 @@ func (q *TableQuery) DataFilter() func(db *gorm.DB) *gorm.DB {
 		patchOperator(&f)
 		if _, ok := q.sqlMappers[f.Field]; ok {
 			if v, ok := f.Value.(string); ok && v != "" {
-				vs := v
+				// Text columns are always compared as LOWER(col::text), so the
+				// value must be lowercased for every operator (=, !=, like…),
+				// not just like/in. See vxcontrol/pentagi#462.
+				vs := strings.ToLower(v)
 				if slices.Contains([]string{"like", "not like"}, f.Operator) {
-					vs = "%" + strings.ToLower(vs) + "%"
+					vs = "%" + vs + "%"
 				}
 				setFilter(f.Field, f.Operator, vs)
 			}
