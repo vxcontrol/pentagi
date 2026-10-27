@@ -495,6 +495,9 @@ func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, 
 	if err := validateFilePath(path); err != nil {
 		return "", err
 	}
+	if content == "" {
+		return "", fmt.Errorf("content is required and cannot be empty")
+	}
 
 	if err := t.writeFileToContainer(ctx, flowID, path, content); err != nil {
 		return "", err

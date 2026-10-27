@@ -325,6 +325,23 @@ func TestTerminal_WriteFile_RefusesANameTheArchiveCannotCarry(t *testing.T) {
 	}
 }
 
+func TestTerminal_WriteFile_RefusesEmptyContent(t *testing.T) {
+	mock := &fakeDockerClient{isRunning: true}
+	tlp := &recordingTermLog{}
+	term := terminalFor(mock, tlp)
+
+	result, err := term.Handle(t.Context(), FileToolName,
+		mustJSON(map[string]any{"action": "write_file", "path": "/work/probe.txt", "content": "", "message": "test"}))
+
+	require.NoError(t, err, "a tool failure is a soft (nil-error) response")
+	assert.Equal(t, "terminal tool 'file' handled with error: content is required and cannot be empty", result)
+	assert.Zero(t, mock.copies, "nothing may be copied into the sandbox")
+
+	_, writeErr := term.WriteFile(t.Context(), 1, "", "/work/probe.txt")
+	require.Error(t, writeErr)
+	assert.Equal(t, "content is required and cannot be empty", writeErr.Error())
+}
+
 func TestTerminal_EditFile_AppliesTheDiff(t *testing.T) {
 	big := terminalLargeFileContent(2000)
 	const firstLine = "line 00000: the quick brown fox jumps over the lazy dog"
