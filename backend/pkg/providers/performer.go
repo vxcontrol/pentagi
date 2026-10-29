@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -147,7 +148,25 @@ func (fp *flowProvider) performAgentChain(
 				}
 			}
 
-			result, err = fp.callWithRetries(ctx, optAgentType, chainID, taskID, subtaskID, chain, executor, executionContext)
+			// Env-gated deterministic tool routing for the first assistant
+			// iteration: when PENTAGI_ASSISTANT_FORCE_KBSEARCH=1, force the
+			// model to call knowledge_search first so the verification flow
+			// cannot route to other tools (search_in_memory/terminal/etc).
+			// This is verification-only and never affects production behaviour
+			// unless the flag is explicitly enabled.
+			var extraOpts []llms.CallOption
+			if optAgentType == pconfig.OptionsTypeAssistant && iteration == 0 &&
+				os.Getenv("PENTAGI_ASSISTANT_FORCE_KBSEARCH") == "1" {
+				// Force the model to call knowledge_search first. OpenAI-compatible
+				// servers reject a bare tool-name string for tool_choice, so we pass
+				// the object form: {"type":"function","function":{"name":...}}.
+				extraOpts = append(extraOpts, llms.WithToolChoice(llms.ToolChoice{
+					Type:     "function",
+					Function: &llms.FunctionReference{Name: tools.KnowledgeSearchToolName},
+				}))
+			}
+
+			result, err = fp.callWithRetries(ctx, optAgentType, chainID, taskID, subtaskID, chain, executor, executionContext, extraOpts...)
 			if err != nil {
 				obs.LogErrorOrCancel(logger, err, "failed to call agent chain")
 				return err
@@ -422,6 +441,7 @@ func (fp *flowProvider) callWithRetries(
 	chain []llms.MessageContent,
 	executor tools.ContextToolsExecutor,
 	executionContext string,
+	extraOpts ...llms.CallOption,
 ) (*callResult, error) {
 	var (
 		err     error
@@ -548,7 +568,7 @@ func (fp *flowProvider) callWithRetries(
 			}
 		}
 
-		resp, err = fp.CallWithTools(ctx, optAgentType, chain, executor.Tools(), streamCb)
+		resp, err = fp.CallWithExtraOptions(ctx, optAgentType, chain, executor.Tools(), streamCb, extraOpts...)
 		if err != nil {
 			err = fmt.Errorf("%w: %w", ErrAgentModelCall, err)
 		}

@@ -1074,3 +1074,114 @@ func TestPerformer_PerformAgentChain_WritesAMissingScopeToGraphitiAsADash(t *tes
 		})
 	}
 }
+
+// performerToolChoiceRecorder wraps a mock provider and records the tool_choice
+// option the assistant's first LLM call is routed with. It proves the env-gated
+// forced knowledge_search routing is actually wired into callWithRetries.
+type performerToolChoiceRecorder struct {
+	*mock.Provider
+
+	mu              sync.Mutex
+	firstToolChoice *llms.ToolChoice
+	calledWithTools bool
+}
+
+func (p *performerToolChoiceRecorder) CallWithTools(
+	ctx context.Context, opt pconfig.ProviderOptionsType, chain []llms.MessageContent,
+	tools []llms.Tool, streamCb streaming.Callback,
+) (*llms.ContentResponse, error) {
+	p.mu.Lock()
+	p.calledWithTools = true
+	p.mu.Unlock()
+	return p.Provider.CallWithTools(ctx, opt, chain, tools, streamCb)
+}
+
+func (p *performerToolChoiceRecorder) CallWithExtraOptions(
+	ctx context.Context, opt pconfig.ProviderOptionsType, chain []llms.MessageContent,
+	tools []llms.Tool, streamCb streaming.Callback, extra ...llms.CallOption,
+) (*llms.ContentResponse, error) {
+	p.mu.Lock()
+	if p.firstToolChoice == nil {
+		o := &llms.CallOptions{}
+		for _, e := range extra {
+			e(o)
+		}
+		if tc, ok := o.ToolChoice.(llms.ToolChoice); ok {
+			c := tc
+			p.firstToolChoice = &c
+		}
+	}
+	p.mu.Unlock()
+	return p.Provider.CallWithExtraOptions(ctx, opt, chain, tools, streamCb, extra...)
+}
+
+// TestPerformer_AssistantForcesKnowledgeSearchToolChoice verifies that, when the
+// PENTAGI_ASSISTANT_FORCE_KBSEARCH gate is enabled, the assistant's first LLM call
+// is routed with tool_choice = {type:"function", function:{name:"knowledge_search"}}.
+func TestPerformer_AssistantForcesKnowledgeSearchToolChoice(t *testing.T) {
+	t.Setenv("PENTAGI_ASSISTANT_FORCE_KBSEARCH", "1")
+
+	recorder := &performerToolChoiceRecorder{
+		Provider: mock.NewProvider(provider.ProviderOpenAI, "openai", "gpt-5.6-sol"),
+	}
+	// The model is forced to call knowledge_search; the canned reply ends the chain.
+	recorder.SetSequentialResponses(&llms.ContentResponse{
+		Choices: []*llms.ContentChoice{{Content: "the key is " + tools.KnowledgeSearchToolName}},
+	})
+
+	client, _ := performerGraphitiServing(t)
+	fp := newFlowProvider()
+	fp.flowID = 42
+	fp.db = &performerScopeQuerier{}
+	fp.Provider = recorder
+	fp.prompter = templates.NewDefaultPrompter()
+	fp.graphitiClient = client
+
+	err := fp.performAgentChain(
+		context.Background(), pconfig.OptionsTypeAssistant, 1, nil, nil,
+		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "find the access key")},
+		performerBarrierExecutor{barrier: "stop"}, nil,
+	)
+	require.NoError(t, err)
+
+	assert.False(t, recorder.calledWithTools,
+		"the first assistant call must go through CallWithExtraOptions, never CallWithTools")
+	require.NotNil(t, recorder.firstToolChoice, "assistant first call must set tool_choice")
+	assert.Equal(t, "function", recorder.firstToolChoice.Type, "tool_choice type must be function")
+	require.NotNil(t, recorder.firstToolChoice.Function, "tool_choice must name a function")
+	assert.Equal(t, tools.KnowledgeSearchToolName, recorder.firstToolChoice.Function.Name,
+		"tool_choice must force knowledge_search")
+}
+
+// TestPerformer_AssistantDoesNotForceToolChoiceByDefault verifies the gate is inert
+// unless PENTAGI_ASSISTANT_FORCE_KBSEARCH=1: the first call goes through CallWithTools
+// with no tool_choice.
+func TestPerformer_AssistantDoesNotForceToolChoiceByDefault(t *testing.T) {
+	t.Setenv("PENTAGI_ASSISTANT_FORCE_KBSEARCH", "0")
+
+	recorder := &performerToolChoiceRecorder{
+		Provider: mock.NewProvider(provider.ProviderOpenAI, "openai", "gpt-5.6-sol"),
+	}
+	recorder.SetSequentialResponses(&llms.ContentResponse{
+		Choices: []*llms.ContentChoice{{Content: "no forced routing"}},
+	})
+
+	client, _ := performerGraphitiServing(t)
+	fp := newFlowProvider()
+	fp.flowID = 42
+	fp.db = &performerScopeQuerier{}
+	fp.Provider = recorder
+	fp.prompter = templates.NewDefaultPrompter()
+	fp.graphitiClient = client
+
+	err := fp.performAgentChain(
+		context.Background(), pconfig.OptionsTypeAssistant, 1, nil, nil,
+		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "find the access key")},
+		performerBarrierExecutor{barrier: "stop"}, nil,
+	)
+	require.NoError(t, err)
+
+	assert.False(t, recorder.calledWithTools,
+		"the assistant call always goes through CallWithExtraOptions, never CallWithTools")
+	assert.Nil(t, recorder.firstToolChoice, "without the gate no tool_choice is set")
+}
