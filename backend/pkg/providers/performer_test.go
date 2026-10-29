@@ -1145,7 +1145,7 @@ func TestPerformer_AssistantForcesKnowledgeSearchToolChoice(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.False(t, recorder.calledWithTools,
-		"the first assistant call must go through CallWithExtraOptions, never CallWithTools")
+		"with the gate on the first assistant call must go through CallWithExtraOptions")
 	require.NotNil(t, recorder.firstToolChoice, "assistant first call must set tool_choice")
 	assert.Equal(t, "function", recorder.firstToolChoice.Type, "tool_choice type must be function")
 	require.NotNil(t, recorder.firstToolChoice.Function, "tool_choice must name a function")
@@ -1154,8 +1154,8 @@ func TestPerformer_AssistantForcesKnowledgeSearchToolChoice(t *testing.T) {
 }
 
 // TestPerformer_AssistantDoesNotForceToolChoiceByDefault verifies the gate is inert
-// unless PENTAGI_ASSISTANT_FORCE_KBSEARCH=1: the first call goes through CallWithTools
-// with no tool_choice.
+// unless PENTAGI_ASSISTANT_FORCE_KBSEARCH=1: the first call goes through
+// CallWithTools with no tool_choice.
 func TestPerformer_AssistantDoesNotForceToolChoiceByDefault(t *testing.T) {
 	t.Setenv("PENTAGI_ASSISTANT_FORCE_KBSEARCH", "0")
 
@@ -1181,7 +1181,7 @@ func TestPerformer_AssistantDoesNotForceToolChoiceByDefault(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	assert.False(t, recorder.calledWithTools,
-		"the assistant call always goes through CallWithExtraOptions, never CallWithTools")
+	assert.True(t, recorder.calledWithTools,
+		"without the gate the assistant call keeps using CallWithTools")
 	assert.Nil(t, recorder.firstToolChoice, "without the gate no tool_choice is set")
 }

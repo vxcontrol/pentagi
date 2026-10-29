@@ -568,7 +568,15 @@ func (fp *flowProvider) callWithRetries(
 			}
 		}
 
-		resp, err = fp.CallWithExtraOptions(ctx, optAgentType, chain, executor.Tools(), streamCb, extraOpts...)
+		// Only take the CallWithExtraOptions path when there are options to pass:
+		// providers treat the two entry points differently (the mock provider
+		// resolves its canned responses in CallWithTools), so the default path
+		// must keep using CallWithTools.
+		if len(extraOpts) > 0 {
+			resp, err = fp.CallWithExtraOptions(ctx, optAgentType, chain, executor.Tools(), streamCb, extraOpts...)
+		} else {
+			resp, err = fp.CallWithTools(ctx, optAgentType, chain, executor.Tools(), streamCb)
+		}
 		if err != nil {
 			err = fmt.Errorf("%w: %w", ErrAgentModelCall, err)
 		}
