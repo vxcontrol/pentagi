@@ -12,7 +12,6 @@ import (
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/graph/model"
-	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/providers/embeddings"
 
 	"github.com/google/uuid"
@@ -28,9 +27,19 @@ const (
 
 var ErrInvalidDocument = errors.New("invalid knowledge document")
 
+// KnowledgePublisher is the minimal publisher surface the knowledge store needs to
+// announce document lifecycle events. It is declared in this package (instead of
+// reusing graph/subscriptions.KnowledgePublisher) so that pkg/database/knowledge
+// does not import pkg/graph/subscriptions — that import would create a cycle
+// (tools -> knowledge -> subscriptions -> converter -> tester -> tools).
+type KnowledgePublisher interface {
+	KnowledgeDocumentCreated(ctx context.Context, doc *model.KnowledgeDocument)
+	KnowledgeDocumentUpdated(ctx context.Context, doc *model.KnowledgeDocument)
+	KnowledgeDocumentDeleted(ctx context.Context, doc *model.KnowledgeDocument)
+}
+
 // PublisherFactory creates a per-user KnowledgePublisher.
-// Matches subscriptions.SubscriptionsController.NewKnowledgePublisher signature.
-type PublisherFactory func(userID int64) subscriptions.KnowledgePublisher
+type PublisherFactory func(userID int64) KnowledgePublisher
 
 // KnowledgeStore covers all GraphQL knowledge operations:
 //   - Admin read methods have no user_id filtering.

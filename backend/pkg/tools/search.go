@@ -150,6 +150,12 @@ func (s *search) Handle(ctx context.Context, name string, args json.RawMessage) 
 		}).Debug("all queries completed")
 
 		docs := MergeAndDeduplicateDocs(allDocs, searchVectorStoreResultLimit)
+		// Exclude user-curated knowledge-base documents (manual=true) from the agent's
+		// own memory search. Those are retrieved via the dedicated knowledge_search tool,
+		// not via search_answer/search_guide/search_code. This mirrors the contract in
+		// pkg/database/knowledge: the manual flag is set only by CreateDocument (user
+		// uploads) and never by an agent's store tool, so agent-generated content stays.
+		docs = excludeManualKnowledgeDocs(docs)
 
 		logger.WithFields(logrus.Fields{
 			"docs_after_dedup": len(docs),
@@ -393,4 +399,40 @@ func (s *search) Handle(ctx context.Context, name string, args json.RawMessage) 
 
 func (s *search) IsAvailable() bool {
 	return s.store != nil
+}
+
+// excludeManualKnowledgeDocs drops documents that belong to the user's CURATED
+// knowledge base (manual=true) so the agent's own memory search tools
+// (search_answer / search_guide / search_code) never surface user-uploaded docs.
+// Those are meant to be retrieved through the dedicated knowledge_search tool.
+// The manual flag comes from the vector-store metadata; we tolerate both bool and
+// string representations since different layers may serialize it differently.
+func excludeManualKnowledgeDocs(docs []schema.Document) []schema.Document {
+	if len(docs) == 0 {
+		return docs
+	}
+	out := make([]schema.Document, 0, len(docs))
+	for _, d := range docs {
+		if v, ok := d.Metadata["manual"]; ok {
+			switch m := v.(type) {
+			case bool:
+				if m {
+					logrus.Infof("MARKER_EXCLUDED_MANUAL_KB_DOC")
+					continue
+				}
+			case string:
+				if m == "true" {
+					logrus.Infof("MARKER_EXCLUDED_MANUAL_KB_DOC")
+					continue
+				}
+			default:
+				if fmt.Sprintf("%v", v) == "true" {
+					logrus.Infof("MARKER_EXCLUDED_MANUAL_KB_DOC")
+					continue
+				}
+			}
+		}
+		out = append(out, d)
+	}
+	return out
 }

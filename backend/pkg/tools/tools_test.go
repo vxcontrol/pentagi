@@ -593,10 +593,12 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 			tools: map[string]string{
 				"terminal": "", "file": "", "browser": "", "web_search": "",
 				"search_in_memory": "", "search_guide": "", "search_answer": "", "search_code": "",
+				"knowledge_search": "",
 				"get_flow_status": "", "stop_flow": "", "submit_flow_input": "", "patch_flow_subtasks": "", "wait_flow_completion": "",
 			},
 			optional: []string{
 				"browser", "web_search", "search_in_memory", "search_guide", "search_answer", "search_code",
+				"knowledge_search",
 				"stop_flow", "submit_flow_input", "patch_flow_subtasks", "wait_flow_completion",
 			},
 			required: []string{"Adviser", "Coder", "Installer", "Memorist", "Pentester", "Searcher"},
@@ -610,10 +612,12 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 				"terminal": "", "file": "", "browser": "", "web_search": "",
 				"advice": "Adviser", "coder": "Coder", "maintenance": "Installer",
 				"memorist": "Memorist", "pentester": "Pentester", "search": "Searcher",
+				"knowledge_search": "",
 				"get_flow_status": "", "stop_flow": "", "submit_flow_input": "", "patch_flow_subtasks": "", "wait_flow_completion": "",
 			},
 			optional: []string{
-				"browser", "web_search", "stop_flow", "submit_flow_input", "patch_flow_subtasks", "wait_flow_completion",
+				"browser", "web_search", "knowledge_search",
+				"stop_flow", "submit_flow_input", "patch_flow_subtasks", "wait_flow_completion",
 			},
 			sandbox: true,
 		},
