@@ -310,3 +310,21 @@ services:
     networks:
       - pentagi-network
     shm_size: 2g
+
+  # 本地 Ollama 服务（完整 RAG 的 embedding 来源，musl 原生自建镜像）
+  # PentAGI 经服务名 ollama-server:11434 访问，复用 pentagi-ollama 卷存模型
+  ollama-server:
+    image: ${OLLAMA_IMAGE:-ollama-local:0.13}
+    container_name: ollama-server
+    restart: unless-stopped
+    hostname: ollama-server
+    expose:
+      - 11434/tcp
+    ports:
+      - ${OLLAMA_LISTEN_IP:-127.0.0.1}:${OLLAMA_LISTEN_PORT:-11434}:11434
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    volumes:
+      - ${PENTAGI_OLLAMA_DIR:-pentagi-ollama}:/root/.ollama
+    networks:
+      - pentagi-network

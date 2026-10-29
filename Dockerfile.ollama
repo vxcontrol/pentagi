@@ -1,0 +1,15 @@
+# 本地 Ollama（musl 原生，供 PentAGI 完整 RAG embedding 用）
+# 基于 alpine + 清华 apk 镜像源；官方 ollama/ollama 镜像大层拉取反复被重置，故自建
+FROM alpine:3.23
+
+RUN sed -i 's#https://dl-cdn.alpinelinux.org#https://mirrors.tuna.tsinghua.edu.cn#g; s#http://dl-cdn.alpinelinux.org#https://mirrors.tuna.tsinghua.edu.cn#g' /etc/apk/repositories \
+    && grep -q community /etc/apk/repositories || echo "https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.23/community" >> /etc/apk/repositories \
+    && apk add --no-cache ollama curl
+
+ENV OLLAMA_HOST=0.0.0.0:11434 \
+    OLLAMA_MODELS=/root/.ollama/models
+
+EXPOSE 11434
+
+ENTRYPOINT ["ollama"]
+CMD ["serve"]
