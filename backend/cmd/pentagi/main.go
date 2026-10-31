@@ -36,7 +36,20 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
+// HTTP shutdown and telemetry drain run on fresh contexts: the signal context
+// is already cancelled by the time either starts.
+const (
+	httpShutdownTimeout   = 15 * time.Second
+	telemetryDrainTimeout = 5 * time.Second
+)
+
 func main() {
+	// os.Exit skips deferred calls, so every deferred cleanup lives in
+	// runApplication and the exit status is only decided once it has returned.
+	os.Exit(runApplication())
+}
+
+func runApplication() int {
 	// Setup graceful shutdown context with signal handling
 	ctx, cancelOnSignal := signal.NotifyContext(
 		context.Background(),
@@ -50,7 +63,7 @@ func main() {
 	// exits, and its output is a JSON document on stdout — a greeting printed
 	// first would be the first thing a reader has to strip back out.
 	if wantsInfo(os.Args[1:]) {
-		os.Exit(runInfo(ctx))
+		return runInfo(ctx)
 	}
 
 	logrus.Infof("Starting PentAGI %s", version.GetBinaryVersion())
@@ -125,6 +138,15 @@ func main() {
 	db.SetMaxOpenConns(cfg.DBMaxOpenConns)
 	db.SetMaxIdleConns(cfg.DBMaxIdleConns)
 	db.SetConnMaxLifetime(time.Hour)
+
+	// One pool shared by sqlc and GORM, closed here exactly once. Deferred, so
+	// it runs only after the HTTP server has stopped (and after the pgxpool
+	// defer below, which was registered later).
+	defer func() {
+		if err := db.Close(); err != nil {
+			logrus.WithError(err).Warn("failed to close the database connection pool")
+		}
+	}()
 
 	if err := database.VerifySearchPath(ctx, db, cfg); err != nil {
 		logrus.WithError(err).Fatal("Tenant schema verification failed")
@@ -236,47 +258,147 @@ func main() {
 
 	r := router.NewRouter(queries, orm, cfg, providers, controller, subscriptions, client, updates)
 
-	// Launch HTTP/HTTPS server in background goroutine
-	serverErrChan := make(chan error, 1)
-	go func() {
-		listen := net.JoinHostPort(cfg.ServerHost, strconv.Itoa(cfg.ServerPort))
+	listen := net.JoinHostPort(cfg.ServerHost, strconv.Itoa(cfg.ServerPort))
+	srv := &http.Server{
+		Addr:              listen,
+		Handler:           r.Handler(),
+		ReadHeaderTimeout: router.ReadHeaderTimeout,
+		IdleTimeout:       router.IdleTimeout,
+	}
+
+	serve := func() error {
 		logrus.Infof("API server listening on %s", listen)
 
-		srv := &http.Server{
-			Addr:              listen,
-			Handler:           r.Handler(),
-			ReadHeaderTimeout: router.ReadHeaderTimeout,
-			IdleTimeout:       router.IdleTimeout,
-		}
-
-		var startErr error
 		if cfg.ServerUseSSL && cfg.ServerSSLCrt != "" && cfg.ServerSSLKey != "" {
 			logrus.Info("Starting server with TLS enabled")
-			startErr = srv.ListenAndServeTLS(cfg.ServerSSLCrt, cfg.ServerSSLKey)
-		} else {
-			logrus.Info("Starting server without TLS (HTTP only)")
-			startErr = srv.ListenAndServe()
+			return srv.ListenAndServeTLS(cfg.ServerSSLCrt, cfg.ServerSSLKey)
 		}
 
-		if startErr != nil {
-			serverErrChan <- fmt.Errorf("API server startup failed: %w", startErr)
-		}
-	}()
+		logrus.Info("Starting server without TLS (HTTP only)")
+		return srv.ListenAndServe()
+	}
 
-	// Block until shutdown signal received or server error occurs
+	// Blocks until a shutdown signal or a server failure, then stops the HTTP
+	// server and drains telemetry. The exit code is returned rather than raised
+	// with Fatal so the deferred pool cleanup above still runs.
+	exitCode := serveUntilShutdown(ctx, srv, serve, httpShutdownTimeout, func(ctx context.Context) error {
+		return obs.Observer.Drain(ctx)
+	})
+
+	// On a server failure ctx is still live; cancel it so work bound to it (the
+	// update service, flows) stops before the deferred calls close the pools.
+	// Idempotent after a signal.
+	cancelOnSignal()
+
+	if exitCode == 0 {
+		logrus.Info("Application shutdown completed successfully")
+	}
+
+	return exitCode
+}
+
+// httpServer is the part of *http.Server the shutdown logic needs, so tests can
+// drive the deadline and failure paths without waiting on real timers.
+type httpServer interface {
+	Shutdown(ctx context.Context) error
+	Close() error
+}
+
+// serveUntilShutdown runs serve until ctx is cancelled or serve fails, stops the
+// HTTP server, and only then drains telemetry, so requests that finish during
+// graceful shutdown can still emit it. It returns the process exit code and
+// never exits itself, which keeps the caller's deferred cleanup reachable.
+func serveUntilShutdown(
+	ctx context.Context,
+	srv httpServer,
+	serve func() error,
+	shutdownTimeout time.Duration,
+	drain func(context.Context) error,
+) int {
+	err := superviseHTTPServer(ctx, srv, serve, shutdownTimeout)
+
+	drainTelemetry(drain)
+
+	if err != nil {
+		logrus.WithError(err).Error("HTTP server terminated with an error")
+		return 1
+	}
+
+	return 0
+}
+
+// superviseHTTPServer runs serve in the background and returns once the server
+// has been stopped. It returns nil only for a shutdown it requested itself and
+// that completed gracefully.
+func superviseHTTPServer(
+	ctx context.Context,
+	srv httpServer,
+	serve func() error,
+	shutdownTimeout time.Duration,
+) error {
+	// Buffered so the goroutine can always deliver its result and exit, even
+	// when nobody is left to receive it.
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- serve() }()
+
 	select {
 	case <-ctx.Done():
 		logrus.Warn("Shutdown signal received, cleaning up resources...")
-		// ctx is already cancelled here — drain telemetry on a fresh deadline so the
-		// final batch still reaches the collector before the process exits.
-		drainCtx, cancelDrain := context.WithTimeout(context.Background(), 5*time.Second)
-		if err := obs.Observer.Drain(drainCtx); err != nil {
-			logrus.WithError(err).Warn("Telemetry drain incomplete")
+		shutdownErr := shutdownHTTPServer(srv, shutdownTimeout)
+
+		// Shutdown makes serve return http.ErrServerClosed. Wait for it so a real
+		// error that raced the signal is reported instead of lost.
+		var failure error
+		if err := <-serveErr; err != nil && !errors.Is(err, http.ErrServerClosed) {
+			failure = fmt.Errorf("API server failed: %w", err)
 		}
-		cancelDrain()
-	case err := <-serverErrChan:
-		logrus.Fatalf("Server terminated unexpectedly: %v", err)
+
+		return errors.Join(failure, shutdownErr)
+
+	case err := <-serveErr:
+		// Nobody asked the server to stop, so even http.ErrServerClosed or a nil
+		// return means it died on its own.
+		if err == nil {
+			err = errors.New("serve returned without an error")
+		}
+		failure := fmt.Errorf("API server failed: %w", err)
+
+		// Connections accepted before the failure are still being served; give
+		// them the same bounded shutdown before their resources are released.
+		return errors.Join(failure, shutdownHTTPServer(srv, shutdownTimeout))
+	}
+}
+
+// shutdownHTTPServer gracefully stops srv within timeout and force-closes what
+// remains if that fails. Shutdown does not wait for hijacked connections
+// (WebSockets), nor does it stop background services or running flows.
+func shutdownHTTPServer(srv httpServer, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	err := srv.Shutdown(ctx)
+	if err == nil {
+		return nil
 	}
 
-	logrus.Info("Application shutdown completed successfully")
+	logrus.WithError(err).Warn("Graceful HTTP shutdown failed, closing remaining connections")
+	shutdownErr := fmt.Errorf("graceful HTTP shutdown: %w", err)
+
+	if closeErr := srv.Close(); closeErr != nil {
+		logrus.WithError(closeErr).Error("Forced HTTP server close failed")
+		return errors.Join(shutdownErr, fmt.Errorf("force close HTTP server: %w", closeErr))
+	}
+
+	return shutdownErr
+}
+
+// drainTelemetry flushes buffered telemetry on its own deadline. A failure is
+// only logged: losing a final batch must not change the exit status.
+func drainTelemetry(drain func(context.Context) error) {
+	ctx, cancel := context.WithTimeout(context.Background(), telemetryDrainTimeout)
+	defer cancel()
+
+	if err := drain(ctx); err != nil {
+		logrus.WithError(err).Warn("Telemetry drain incomplete")
+	}
 }
