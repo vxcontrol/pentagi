@@ -194,6 +194,28 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 
 		resultObj = builder.String()
 
+	case tools.OutcrawlToolName:
+		var searchArgs tools.SearchAction
+		if err := json.Unmarshal(args, &searchArgs); err != nil {
+			return "", fmt.Errorf("error unmarshaling search arguments: %w", err)
+		}
+
+		terminal.PrintMock("Outcrawl search:")
+		terminal.PrintKeyValue("Query", searchArgs.Query)
+		terminal.PrintKeyValueFormat("Max results", "%d", searchArgs.MaxResults.Int())
+
+		var builder strings.Builder
+		builder.WriteString("# Links\n\n")
+
+		for i := 1; i <= min(searchArgs.MaxResults.Int(), 3); i++ {
+			fmt.Fprintf(&builder, "## %d. Mock Outcrawl Result %d\n\n", i, i)
+			fmt.Fprintf(&builder, "* URL https://example.com/outcrawl/result%d\n\n", i)
+			fmt.Fprintf(&builder, "### Short content\n\nHere is a brief description of the content from this search result related to '%s'.\n\n", searchArgs.Query)
+			fmt.Fprintf(&builder, "### Raw content for %d. Mock Outcrawl Result %d\n\nThis is the page markdown that Outcrawl would return for the URL. It contains comprehensive information about '%s' that helps answer your query with specific facts and data points relevant to your search.\n\n", i, i, searchArgs.Query)
+		}
+
+		resultObj = builder.String()
+
 	case tools.TraversaalToolName:
 		var searchArgs tools.SearchAction
 		if err := json.Unmarshal(args, &searchArgs); err != nil {

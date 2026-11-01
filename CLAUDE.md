@@ -233,7 +233,7 @@ All three pass through `pkg/server/auth/auth_middleware.go`, which offers `AuthU
 ### Key Integrations
 
 - **LLM Providers**: OpenAI, Anthropic, Gemini, AWS Bedrock, Ollama, DeepSeek, GLM, Kimi, Qwen, MiniMax, Mistral, xAI, and custom OpenAI-compatible endpoints. The authoritative list is `providerRegistry` in `backend/pkg/providers/registry.go` — check it before enumerating providers anywhere else.
-- **Search**: DuckDuckGo, Google, Tavily, Firecrawl, Traversaal, Perplexity, Searxng, Sploitus and an internal browser-backed engine, all behind the single `web_search` tool. Authoritative list: `buildSearchEngines` in `backend/pkg/tools/web_search.go`.
+- **Search**: DuckDuckGo, Google, Tavily, Firecrawl, Outcrawl, Traversaal, Perplexity, Searxng, Sploitus and an internal browser-backed engine, all behind the single `web_search` tool. Authoritative list: `buildSearchEngines` in `backend/pkg/tools/web_search.go`.
 - **Databases**: PostgreSQL + pgvector (required); Neo4j (optional) behind the Graphiti service, reached over HTTP.
 - **Observability**: OpenTelemetry → VictoriaMetrics + Loki + Jaeger → Grafana; Langfuse for LLM analytics.
 

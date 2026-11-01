@@ -236,6 +236,9 @@ type Config struct {
 	FirecrawlAPIKey string `env:"FIRECRAWL_API_KEY"`
 	FirecrawlAPIURL string `env:"FIRECRAWL_API_URL" envDefault:"https://api.firecrawl.dev"`
 
+	// === Search Engine: Outcrawl ===
+	OutcrawlAPIKey string `env:"OUTCRAWL_API_KEY"`
+
 	// === Search Engine: Perplexity AI ===
 	PerplexityAPIKey      string `env:"PERPLEXITY_API_KEY"`
 	PerplexityModel       string `env:"PERPLEXITY_MODEL" envDefault:"sonar"`
@@ -526,6 +529,7 @@ func (c *Config) GetSecretPatterns() []patterns.Pattern {
 		{c.TraversaalAPIKey, "Traversaal Key"},
 		{c.TavilyAPIKey, "Tavily Key"},
 		{c.FirecrawlAPIKey, "Firecrawl Key"},
+		{c.OutcrawlAPIKey, "Outcrawl Key"},
 		{c.PerplexityAPIKey, "Perplexity Key"},
 		{c.ProxyURL, "Proxy URL"},
 		{c.LangfusePublicKey, "Langfuse Public Key"},

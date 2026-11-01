@@ -327,6 +327,7 @@ func getStructTypeForFunction(funcName string) (reflect.Type, error) {
 		tools.DuckDuckGoToolName:        &tools.SearchAction{},
 		tools.TavilyToolName:            &tools.SearchAction{},
 		tools.FirecrawlToolName:         &tools.SearchAction{},
+		tools.OutcrawlToolName:          &tools.SearchAction{},
 		tools.TraversaalToolName:        &tools.SearchAction{},
 		tools.PerplexityToolName:        &tools.SearchAction{},
 		tools.SearxngToolName:           &tools.SearchAction{},

@@ -478,6 +478,7 @@ const (
 	SearchengineTypeGoogle     SearchengineType = "google"
 	SearchengineTypeTavily     SearchengineType = "tavily"
 	SearchengineTypeFirecrawl  SearchengineType = "firecrawl"
+	SearchengineTypeOutcrawl   SearchengineType = "outcrawl"
 	SearchengineTypeTraversaal SearchengineType = "traversaal"
 	SearchengineTypeBrowser    SearchengineType = "browser"
 	SearchengineTypeDuckduckgo SearchengineType = "duckduckgo"
