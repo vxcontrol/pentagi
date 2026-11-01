@@ -86,6 +86,7 @@ func TestErrors_ErrNotConfigured_EveryEngineRefusesWithoutConfig(t *testing.T) {
 		{"firecrawl refuses", NewFirecrawl(nil, nil)},
 		{"google refuses", NewGoogle(nil)},
 		{"the internal engine refuses", NewInternal(nil, nil, nil, nil)},
+		{"outcrawl refuses", NewOutcrawl(nil, nil)},
 		{"perplexity refuses", NewPerplexity(nil, nil)},
 		{"searxng refuses", NewSearxng(nil, nil)},
 		{"sploitus refuses", NewSploitus(nil)},

@@ -76,6 +76,7 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Traversaal Search](#traversaal-search)
     - [Tavily Search](#tavily-search)
     - [Firecrawl Search](#firecrawl-search)
+    - [Outcrawl Search](#outcrawl-search)
     - [Perplexity Search](#perplexity-search)
     - [Searxng Search](#searxng-search)
     - [Internal Analytics Engine](#internal-analytics-engine)
@@ -1687,6 +1688,7 @@ Common built-in functions that can be disabled:
 - `duckduckgo` - DuckDuckGo Search
 - `tavily` - Tavily Search
 - `firecrawl` - Firecrawl Search
+- `outcrawl` - Outcrawl Search
 - `traversaal` - Traversaal Search
 - `perplexity` - Perplexity Search
 - `searxng` - SearXNG Search
@@ -1740,6 +1742,12 @@ These settings control the integration with various search engines used for web 
 | --------------- | -------------------- | --------------------------- | ------------------------------------------------------------------------------ |
 | FirecrawlAPIKey | `FIRECRAWL_API_KEY`  | *(none)*                    | API key for Firecrawl search engine                                            |
 | FirecrawlAPIURL | `FIRECRAWL_API_URL`  | `https://api.firecrawl.dev` | Base URL for the Firecrawl API (override to point at a self-hosted deployment) |
+
+### Outcrawl Search
+
+| Option         | Environment Variable | Default Value | Description                        |
+| -------------- | -------------------- | ------------- | ---------------------------------- |
+| OutcrawlAPIKey | `OUTCRAWL_API_KEY`   | *(none)*      | API key for Outcrawl search engine |
 
 ### Perplexity Search
 

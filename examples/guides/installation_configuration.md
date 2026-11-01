@@ -73,7 +73,7 @@ If you later change the embedding provider or model, flush and reindex the knowl
 
 ## Step 5 - (Optional) Configure search providers
 
-Search providers improve research quality but are optional. PentAGI supports DuckDuckGo (`DUCKDUCKGO_ENABLED`), Sploitus (`SPLOITUS_ENABLED`), Google (`GOOGLE_API_KEY`, `GOOGLE_CX_KEY`), Tavily (`TAVILY_API_KEY`), Firecrawl (`FIRECRAWL_API_KEY`), Traversaal (`TRAVERSAAL_API_KEY`), Perplexity (`PERPLEXITY_API_KEY`), a self-hosted Searxng instance (`SEARXNG_URL`), and an optional internal browser-analytics fallback engine (`WEB_SEARCH_INTERNAL_ENABLED`, off by default). Set the keys for the engines you want in `.env`; the manual installation section shows the full block of search variables.
+Search providers improve research quality but are optional. PentAGI supports DuckDuckGo (`DUCKDUCKGO_ENABLED`), Sploitus (`SPLOITUS_ENABLED`), Google (`GOOGLE_API_KEY`, `GOOGLE_CX_KEY`), Tavily (`TAVILY_API_KEY`), Firecrawl (`FIRECRAWL_API_KEY`), Outcrawl (`OUTCRAWL_API_KEY`), Traversaal (`TRAVERSAAL_API_KEY`), Perplexity (`PERPLEXITY_API_KEY`), a self-hosted Searxng instance (`SEARXNG_URL`), and an optional internal browser-analytics fallback engine (`WEB_SEARCH_INTERNAL_ENABLED`, off by default). Set the keys for the engines you want in `.env`; the manual installation section shows the full block of search variables.
 
 ## Step 6 - (Optional) Enable Graphiti, Langfuse, and observability
 

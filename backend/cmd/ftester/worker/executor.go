@@ -243,6 +243,9 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 	case tools.FirecrawlToolName:
 		return &searcherTool{searcher: searchers.NewFirecrawl(te.cfg, searchers.SummarizeHandler(te.GetSummarizer()))}, nil
 
+	case tools.OutcrawlToolName:
+		return &searcherTool{searcher: searchers.NewOutcrawl(te.cfg, searchers.SummarizeHandler(te.GetSummarizer()))}, nil
+
 	case tools.TraversaalToolName:
 		return &searcherTool{searcher: searchers.NewTraversaal(te.cfg)}, nil
 

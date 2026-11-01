@@ -1711,6 +1711,7 @@ type SearchEnginesConfig struct {
 	TavilyAPIKey      loader.EnvVar // TAVILY_API_KEY
 	FirecrawlAPIKey   loader.EnvVar // FIRECRAWL_API_KEY
 	FirecrawlAPIURL   loader.EnvVar // FIRECRAWL_API_URL
+	OutcrawlAPIKey    loader.EnvVar // OUTCRAWL_API_KEY
 	TraversaalAPIKey  loader.EnvVar // TRAVERSAAL_API_KEY
 	GoogleAPIKey      loader.EnvVar // GOOGLE_API_KEY
 	GoogleCXKey       loader.EnvVar // GOOGLE_CX_KEY
@@ -1755,6 +1756,7 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 	tavilyAPIKey, _ := c.GetVar("TAVILY_API_KEY")
 	firecrawlAPIKey, _ := c.GetVar("FIRECRAWL_API_KEY")
 	firecrawlAPIURL, _ := c.GetVar("FIRECRAWL_API_URL")
+	outcrawlAPIKey, _ := c.GetVar("OUTCRAWL_API_KEY")
 	traversaalAPIKey, _ := c.GetVar("TRAVERSAAL_API_KEY")
 	googleAPIKey, _ := c.GetVar("GOOGLE_API_KEY")
 	googleCXKey, _ := c.GetVar("GOOGLE_CX_KEY")
@@ -1785,6 +1787,7 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 		TavilyAPIKey:                  tavilyAPIKey,
 		FirecrawlAPIKey:               firecrawlAPIKey,
 		FirecrawlAPIURL:               firecrawlAPIURL,
+		OutcrawlAPIKey:                outcrawlAPIKey,
 		TraversaalAPIKey:              traversaalAPIKey,
 		GoogleAPIKey:                  googleAPIKey,
 		GoogleCXKey:                   googleCXKey,
@@ -1819,6 +1822,9 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 		configuredCount++
 	}
 	if firecrawlAPIKey.Value != "" {
+		configuredCount++
+	}
+	if outcrawlAPIKey.Value != "" {
 		configuredCount++
 	}
 	if traversaalAPIKey.Value != "" {
@@ -1883,6 +1889,9 @@ func (c *controller) UpdateSearchEnginesConfig(config *SearchEnginesConfig) erro
 	if err := c.SetVar("FIRECRAWL_API_URL", config.FirecrawlAPIURL.Value); err != nil {
 		return fmt.Errorf("failed to set FIRECRAWL_API_URL: %w", err)
 	}
+	if err := c.SetVar("OUTCRAWL_API_KEY", config.OutcrawlAPIKey.Value); err != nil {
+		return fmt.Errorf("failed to set OUTCRAWL_API_KEY: %w", err)
+	}
 	if err := c.SetVar("TRAVERSAAL_API_KEY", config.TraversaalAPIKey.Value); err != nil {
 		return fmt.Errorf("failed to set TRAVERSAAL_API_KEY: %w", err)
 	}
@@ -1942,6 +1951,7 @@ func (c *controller) ResetSearchEnginesConfig() *SearchEnginesConfig {
 		"TAVILY_API_KEY",
 		"FIRECRAWL_API_KEY",
 		"FIRECRAWL_API_URL",
+		"OUTCRAWL_API_KEY",
 		"TRAVERSAAL_API_KEY",
 		"GOOGLE_API_KEY",
 		"GOOGLE_CX_KEY",
@@ -2540,6 +2550,7 @@ func (c *controller) getVariableDescription(varName string) string {
 		"TAVILY_API_KEY":        locale.EnvDesc_TAVILY_API_KEY,
 		"FIRECRAWL_API_KEY":     locale.EnvDesc_FIRECRAWL_API_KEY,
 		"FIRECRAWL_API_URL":     locale.EnvDesc_FIRECRAWL_API_URL,
+		"OUTCRAWL_API_KEY":      locale.EnvDesc_OUTCRAWL_API_KEY,
 		"TRAVERSAAL_API_KEY":    locale.EnvDesc_TRAVERSAAL_API_KEY,
 		"GOOGLE_API_KEY":        locale.EnvDesc_GOOGLE_API_KEY,
 		"GOOGLE_CX_KEY":         locale.EnvDesc_GOOGLE_CX_KEY,
@@ -2671,6 +2682,7 @@ var maskedVariables = map[string]bool{
 	"PERPLEXITY_API_KEY":        true,
 	"TAVILY_API_KEY":            true,
 	"FIRECRAWL_API_KEY":         true,
+	"OUTCRAWL_API_KEY":          true,
 	"TRAVERSAAL_API_KEY":        true,
 	"GOOGLE_API_KEY":            true,
 	"GOOGLE_CX_KEY":             true,
@@ -2788,6 +2800,7 @@ var criticalVariables = map[string]bool{
 	"TAVILY_API_KEY":          true,
 	"FIRECRAWL_API_KEY":       true,
 	"FIRECRAWL_API_URL":       true,
+	"OUTCRAWL_API_KEY":        true,
 	"TRAVERSAAL_API_KEY":      true,
 	"GOOGLE_API_KEY":          true,
 	"GOOGLE_CX_KEY":           true,

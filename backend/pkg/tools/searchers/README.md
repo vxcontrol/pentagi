@@ -41,4 +41,4 @@ Two rules make the orchestrator possible:
 
 ## Current engines
 
-`google`, `duckduckgo`, `tavily`, `perplexity`, `traversaal`, `sploitus`, `searxng`, `firecrawl`, and `internal` (the opt-in browser-analytics engine, off by default via `WEB_SEARCH_INTERNAL_ENABLED`).
+`google`, `duckduckgo`, `tavily`, `perplexity`, `traversaal`, `sploitus`, `searxng`, `firecrawl`, `outcrawl`, and `internal` (the opt-in browser-analytics engine, off by default via `WEB_SEARCH_INTERNAL_ENABLED`).

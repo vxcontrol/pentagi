@@ -25,6 +25,7 @@ const (
 	DuckDuckGoToolName         = "duckduckgo"
 	TavilyToolName             = "tavily"
 	FirecrawlToolName          = "firecrawl"
+	OutcrawlToolName           = "outcrawl"
 	TraversaalToolName         = "traversaal"
 	PerplexityToolName         = "perplexity"
 	SearxngToolName            = "searxng"
@@ -112,6 +113,7 @@ var toolsTypeMapping = map[string]ToolType{
 	DuckDuckGoToolName:         SearchNetworkToolType,
 	TavilyToolName:             SearchNetworkToolType,
 	FirecrawlToolName:          SearchNetworkToolType,
+	OutcrawlToolName:           SearchNetworkToolType,
 	TraversaalToolName:         SearchNetworkToolType,
 	PerplexityToolName:         SearchNetworkToolType,
 	SearxngToolName:            SearchNetworkToolType,
@@ -160,6 +162,7 @@ var allowedStoringInMemoryTools = []string{
 	DuckDuckGoToolName,
 	TavilyToolName,
 	FirecrawlToolName,
+	OutcrawlToolName,
 	TraversaalToolName,
 	PerplexityToolName,
 	SearxngToolName,
@@ -237,6 +240,13 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Name: TavilyToolName,
 		Description: "Search in the tavily search engine, it's a more complex query and more detailed content " +
 			"with answer by query and detailed information from the web sites",
+		Parameters: reflector.Reflect(&SearchAction{}),
+	},
+	OutcrawlToolName: {
+		Name: OutcrawlToolName,
+		Description: "Search in the outcrawl search engine, it returns web search results together with the " +
+			"markdown content of each result page, ideal for reading documentation, advisories and technical " +
+			"articles directly from the discovered web sites",
 		Parameters: reflector.Reflect(&SearchAction{}),
 	},
 	FirecrawlToolName: {
@@ -466,7 +476,7 @@ func getMessageType(name string) database.MsglogType {
 	case BrowserToolName:
 		return database.MsglogTypeBrowser
 	case MemoristToolName, SearchToolName, GoogleToolName, DuckDuckGoToolName, TavilyToolName, FirecrawlToolName,
-		TraversaalToolName, PerplexityToolName, SearxngToolName, SploitusToolName, WebSearchToolName,
+		OutcrawlToolName, TraversaalToolName, PerplexityToolName, SearxngToolName, SploitusToolName, WebSearchToolName,
 		SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName, GraphitiSearchToolName:
 		return database.MsglogTypeSearch
 	case AdviceToolName:

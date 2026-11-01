@@ -135,6 +135,13 @@ func (m *SearchEnginesFormModel) BuildForm() tea.Cmd {
 		false,
 	))
 
+	// Outcrawl API Key
+	fields = append(fields, m.createAPIKeyField("outcrawl_api_key",
+		locale.ToolsSearchEnginesOutcrawlKey,
+		locale.ToolsSearchEnginesOutcrawlKeyDesc,
+		config.OutcrawlAPIKey,
+	))
+
 	// Traversaal API Key
 	fields = append(fields, m.createAPIKeyField("traversaal_api_key",
 		locale.ToolsSearchEnginesTraversaalKey,
@@ -427,6 +434,15 @@ func (m *SearchEnginesFormModel) GetCurrentConfiguration() string {
 			m.GetStyles().Warning.Render(locale.StatusNotConfigured)))
 	}
 
+	// Outcrawl
+	if config.OutcrawlAPIKey.Value != "" {
+		sections = append(sections, fmt.Sprintf("• Outcrawl: %s",
+			m.GetStyles().Success.Render(locale.StatusConfigured)))
+	} else {
+		sections = append(sections, fmt.Sprintf("• Outcrawl: %s",
+			m.GetStyles().Warning.Render(locale.StatusNotConfigured)))
+	}
+
 	// Traversaal
 	if config.TraversaalAPIKey.Value != "" {
 		sections = append(sections, fmt.Sprintf("• Traversaal: %s",
@@ -511,6 +527,7 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 		TavilyAPIKey:                  config.TavilyAPIKey,
 		FirecrawlAPIKey:               config.FirecrawlAPIKey,
 		FirecrawlAPIURL:               config.FirecrawlAPIURL,
+		OutcrawlAPIKey:                config.OutcrawlAPIKey,
 		TraversaalAPIKey:              config.TraversaalAPIKey,
 		GoogleAPIKey:                  config.GoogleAPIKey,
 		GoogleCXKey:                   config.GoogleCXKey,
@@ -568,6 +585,8 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 			newConfig.FirecrawlAPIKey.Value = value
 		case "firecrawl_api_url":
 			newConfig.FirecrawlAPIURL.Value = value
+		case "outcrawl_api_key":
+			newConfig.OutcrawlAPIKey.Value = value
 		case "traversaal_api_key":
 			newConfig.TraversaalAPIKey.Value = value
 		case "google_api_key":

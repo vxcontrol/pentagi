@@ -37,6 +37,7 @@ const (
 	EngineDuckDuckGo = database.SearchengineTypeDuckduckgo
 	EngineTavily     = database.SearchengineTypeTavily
 	EngineFirecrawl  = database.SearchengineTypeFirecrawl
+	EngineOutcrawl   = database.SearchengineTypeOutcrawl
 	EngineTraversaal = database.SearchengineTypeTraversaal
 	EnginePerplexity = database.SearchengineTypePerplexity
 	EngineSearxng    = database.SearchengineTypeSearxng
@@ -83,27 +84,27 @@ var fallbackStrategy = map[SearchMode][]database.SearchengineType{
 	// 1. Link discovery — cheap index engines first, ordered by breadth/consistency;
 	//    analytic engines are a deep last resort so links never dead-ends.
 	ModeLinks: {
-		EngineGoogle, EngineDuckDuckGo, EngineSearxng, EngineFirecrawl,
+		EngineGoogle, EngineDuckDuckGo, EngineSearxng, EngineFirecrawl, EngineOutcrawl,
 		EngineTavily, EnginePerplexity, EngineTraversaal,
 	},
 
 	// 2. Answer with analysis — engines that navigate + summarize lead; the internal
 	//    browser-analytics engine is a mid/late fallback; link engines are the floor.
 	ModeAnswer: {
-		EngineTavily, EngineFirecrawl, EnginePerplexity, EngineInternal, EngineTraversaal,
+		EngineTavily, EngineFirecrawl, EngineOutcrawl, EnginePerplexity, EngineInternal, EngineTraversaal,
 		EngineGoogle, EngineDuckDuckGo, EngineSearxng,
 	},
 
 	// 3. Deep research — strongest reasoning engine first, then the rest.
 	ModeResearch: {
-		EnginePerplexity, EngineTavily, EngineFirecrawl, EngineInternal, EngineTraversaal,
+		EnginePerplexity, EngineTavily, EngineFirecrawl, EngineOutcrawl, EngineInternal, EngineTraversaal,
 		EngineGoogle, EngineDuckDuckGo, EngineSearxng,
 	},
 
 	// 4. Exploit search — dedicated exploit index first, universal analytic engines
 	//    next, classic engines last.
 	ModeExploit: {
-		EngineSploitus, EngineTavily, EngineFirecrawl, EnginePerplexity, EngineInternal,
+		EngineSploitus, EngineTavily, EngineFirecrawl, EngineOutcrawl, EnginePerplexity, EngineInternal,
 		EngineTraversaal, EngineGoogle, EngineDuckDuckGo, EngineSearxng,
 	},
 }
@@ -111,7 +112,7 @@ var fallbackStrategy = map[SearchMode][]database.SearchengineType{
 // linkEngineOrder is the priority order of link-discovery engines. It is used to feed
 // the internal analytics engine the URLs to read.
 var linkEngineOrder = []database.SearchengineType{
-	EngineGoogle, EngineDuckDuckGo, EngineSearxng, EngineFirecrawl,
+	EngineGoogle, EngineDuckDuckGo, EngineSearxng, EngineFirecrawl, EngineOutcrawl,
 }
 
 const (
@@ -180,6 +181,7 @@ func buildSearchEngines(
 		EngineDuckDuckGo: searchers.NewDuckDuckGo(cfg),
 		EngineTavily:     searchers.NewTavily(cfg, sum),
 		EngineFirecrawl:  searchers.NewFirecrawl(cfg, sum),
+		EngineOutcrawl:   searchers.NewOutcrawl(cfg, sum),
 		EngineTraversaal: searchers.NewTraversaal(cfg),
 		EnginePerplexity: searchers.NewPerplexity(cfg, sum),
 		EngineSearxng:    searchers.NewSearxng(cfg, sum),
@@ -206,6 +208,7 @@ func NewInternalEngine(cfg *config.Config, summarizer SummarizeHandler, fetcher 
 		EngineDuckDuckGo: searchers.NewDuckDuckGo(cfg),
 		EngineSearxng:    searchers.NewSearxng(cfg, sum),
 		EngineFirecrawl:  searchers.NewFirecrawl(cfg, sum),
+		EngineOutcrawl:   searchers.NewOutcrawl(cfg, sum),
 	}
 	links := make([]searchers.Searcher, 0, len(linkEngineOrder))
 	for _, id := range linkEngineOrder {

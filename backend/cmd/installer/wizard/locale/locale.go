@@ -1715,6 +1715,7 @@ const (
 • Perplexity - AI-powered search with reasoning
 • Tavily - Search API for AI applications
 • Firecrawl - Web search with full-page scraping (self-hosting supported)
+• Outcrawl - Web search with the page content of each result as markdown
 • Traversaal - Web scraping and search
 • Google Search - Requires API key and Custom Search Engine ID
 • Searxng - Internet metasearch engine
@@ -1724,6 +1725,7 @@ Get API keys from:
 • Perplexity: https://www.perplexity.ai/
 • Tavily: https://tavily.com/
 • Firecrawl: https://www.firecrawl.dev/
+• Outcrawl: https://outcrawl.ai/
 • Traversaal: https://traversaal.ai/
 • Google: https://developers.google.com/custom-search/v1/introduction`
 
@@ -1747,6 +1749,8 @@ Get API keys from:
 	ToolsSearchEnginesFirecrawlKeyDesc         = "API key for Firecrawl search service"
 	ToolsSearchEnginesFirecrawlURL             = "Firecrawl API URL"
 	ToolsSearchEnginesFirecrawlURLDesc         = "Firecrawl API base URL (leave empty for cloud; set for self-hosted)"
+	ToolsSearchEnginesOutcrawlKey              = "Outcrawl API Key"
+	ToolsSearchEnginesOutcrawlKeyDesc          = "API key for Outcrawl search service"
 	ToolsSearchEnginesTraversaalKey            = "Traversaal API Key"
 	ToolsSearchEnginesTraversaalKeyDesc        = "API key for Traversaal web scraping"
 	ToolsSearchEnginesGoogleKey                = "Google Search API Key"
@@ -2643,6 +2647,7 @@ const (
 	EnvDesc_TAVILY_API_KEY        = "Tavily API Key"
 	EnvDesc_FIRECRAWL_API_KEY     = "Firecrawl API Key"
 	EnvDesc_FIRECRAWL_API_URL     = "Firecrawl API URL"
+	EnvDesc_OUTCRAWL_API_KEY      = "Outcrawl API Key"
 	EnvDesc_TRAVERSAAL_API_KEY    = "Traversaal API Key"
 	EnvDesc_GOOGLE_API_KEY        = "Google Search API Key"
 	EnvDesc_GOOGLE_CX_KEY         = "Google Search CX Key"
