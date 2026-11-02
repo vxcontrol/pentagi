@@ -528,7 +528,7 @@ An earlier revision of this container also forced `no-new-privileges:true` via `
 
 #### Resource Limits
 - **PidsLimit**: Defaults to 2048 when the caller does not set one — a cheap fork-bomb / resource-exhaustion guard, generous enough for parallel scans (nmap, hydra). Mirrors the same default used for the dind daemon in the [Worker Node Setup](../../examples/guides/worker_node.md) guide.
-- **Memory/CPU**: Controlled via standard `HostConfig` resource fields when set by the caller.
+- **Memory/CPU**: Optional operator ceilings `DOCKER_WORKER_CPUS` and `DOCKER_WORKER_MEMORY` apply to both flow workers and the startup sandbox probe. Defaults are `0` (disabled); stricter caller `HostConfig` limits are preserved, including legacy CPU quota/period settings. A configured RAM ceiling also disables swap. Enabled ceilings require daemon controller support, and running workers outside them are refused on reuse until recreated. See [Worker Resource Ceilings](config.md#worker-resource-ceilings) for units, examples and migration guidance.
 
 #### Process Isolation
 - **User Namespaces**: Containers run with isolated user space

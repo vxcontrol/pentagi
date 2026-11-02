@@ -69,11 +69,13 @@ type Config struct {
 	// DockerDefaultImageForTest is the worker the startup sandbox check runs in,
 	// and the image it pulls into the sandbox to prove an agent could. It is a
 	// small image on purpose: the check pays for it on every start.
-	DockerDefaultImageForTest string `env:"DOCKER_DEFAULT_IMAGE_FOR_TEST" envDefault:"vxcontrol/kali-linux:test"`
-	DockerImageSelectionMode  string `env:"DOCKER_IMAGE_SELECTION_MODE" envDefault:"llm"`
-	DockerAllowedImages       string `env:"DOCKER_ALLOWED_IMAGES"`
-	LLMFallbackProvider       string `env:"LLM_FALLBACK_PROVIDER"`
-	TerminalToolTimeout       int    `env:"TERMINAL_TOOL_TIMEOUT" envDefault:"1200"`
+	DockerDefaultImageForTest string  `env:"DOCKER_DEFAULT_IMAGE_FOR_TEST" envDefault:"vxcontrol/kali-linux:test"`
+	DockerImageSelectionMode  string  `env:"DOCKER_IMAGE_SELECTION_MODE" envDefault:"llm"`
+	DockerAllowedImages       string  `env:"DOCKER_ALLOWED_IMAGES"`
+	DockerWorkerCPUs          float64 `env:"DOCKER_WORKER_CPUS" envDefault:"0"`
+	DockerWorkerMemory        int64   `env:"DOCKER_WORKER_MEMORY" envDefault:"0"`
+	LLMFallbackProvider       string  `env:"LLM_FALLBACK_PROVIDER"`
+	TerminalToolTimeout       int     `env:"TERMINAL_TOOL_TIMEOUT" envDefault:"1200"`
 
 	// === API Server Configuration ===
 	ServerPort   int    `env:"SERVER_PORT" envDefault:"8080"`
@@ -357,6 +359,9 @@ func NewConfig() (*Config, error) {
 	}
 
 	if err := config.ValidateTenantID(); err != nil {
+		return nil, err
+	}
+	if err := config.ValidateWorkerResourceLimits(); err != nil {
 		return nil, err
 	}
 

@@ -2,18 +2,74 @@ package docker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"pentagi/pkg/config"
 
+	"github.com/moby/moby/api/types/container"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 const sandboxInfoLine = `{"kind":"info","api":"1.55","body":{"ID":"sandbox-daemon","Plugins":{"Authorization":["opa-docker-authz"]}}}`
+
+func TestSandbox_ProbeSandbox_EnforcesWorkerBudgetsAtStartup(t *testing.T) {
+	captured := make(chan *container.HostConfig, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/_ping"):
+			w.Header().Set("API-Version", "1.55")
+		case strings.HasSuffix(r.URL.Path, "/info"):
+			_, _ = w.Write([]byte(`{"ID":"probe-fixture","CpuCfsQuota":true,"MemoryLimit":true,"SwapLimit":true}`))
+		case strings.HasSuffix(r.URL.Path, "/containers/json"):
+			_, _ = w.Write([]byte(`[]`))
+		case strings.HasSuffix(r.URL.Path, "/containers/create"):
+			var request struct{ HostConfig *container.HostConfig }
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Error(err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			captured <- request.HostConfig
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"message":"fixture refuses probe creation"}`))
+		default:
+			t.Errorf("unexpected Docker request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	t.Cleanup(server.Close)
+	endpoint := "tcp://" + server.Listener.Addr().String()
+	t.Setenv("DOCKER_HOST", endpoint)
+	t.Setenv("DOCKER_API_VERSION", "1.55")
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+	cfg := &config.Config{
+		DataDir: t.TempDir(), DockerWorkDir: t.TempDir(), DockerInside: true,
+		DockerInsideHost: endpoint, DockerInsidePolicyTests: true,
+		DockerDefaultImageForTest: "probe:test", DockerWorkerCPUs: 0.5, DockerWorkerMemory: 134217728,
+	}
+	dc, err := NewDockerClient(t.Context(), nil, cfg)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = dc.(*dockerClient).client.Close() })
+	select {
+	case host := <-captured:
+		require.Equal(t, int64(500000000), host.NanoCPUs)
+		require.Equal(t, int64(134217728), host.Memory)
+		require.Equal(t, int64(134217728), host.MemorySwap)
+		require.Equal(t, int64(2048), *host.PidsLimit)
+	default:
+		t.Fatal("startup did not submit a sandbox probe")
+	}
+}
 
 func TestSandbox_ParseReport_ReadsTheProbeWithoutGuessing(t *testing.T) {
 	t.Parallel()

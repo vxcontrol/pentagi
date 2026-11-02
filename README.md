@@ -891,6 +891,12 @@ For multi-user setups, an authenticated administrator can manage local users thr
 >
 > The `docker-compose.yml` file runs the PentAGI service as root user because it needs access to docker.sock for container management. If you're using TCP/IP network connection to Docker instead of socket file, you can remove root privileges and use the default `pentagi` user for better security.
 
+### Worker Resource Ceilings
+
+Set `DOCKER_WORKER_CPUS` (fractional CPUs, minimum `0.01`) and `DOCKER_WORKER_MEMORY` (bytes, minimum `6291456`, or 6 MiB) in `.env` to cap each worker and the startup sandbox probe. Both default to `0` (disabled), preserving existing deployments. For example, `DOCKER_WORKER_CPUS=2` and `DOCKER_WORKER_MEMORY=4294967296` allow each worker up to 2 CPUs and 4 GiB of RAM. Stricter caller limits are preserved; enabling the memory ceiling also disables worker swap (`MemorySwap = Memory`).
+
+The worker Docker daemon must report support for the configured CPU quota and/or memory and swap controllers; otherwise PentAGI refuses to initialize its Docker client. Rootless daemons need properly delegated cgroups. When enabling or lowering ceilings, stop affected flows and recreate their workers before reuse: PentAGI refuses running workers outside the new ceilings and does not delete their data automatically. These are per-worker limits, not an aggregate budget for concurrent flows or containers launched through an agent-accessible Docker API. Compose limits on the PentAGI service alone do not constrain its separate worker containers. See [Docker's resource constraints](https://docs.docker.com/engine/containers/resource_constraints/) for the underlying CPU, memory and swap semantics.
+
 ### Accessing PentAGI from External Networks
 
 By default, the PentAGI web interface and the other compose services bind to `127.0.0.1` (localhost only) for security. To access PentAGI from other machines on your network, you need to configure external access.
