@@ -89,6 +89,7 @@ type dockerClient struct {
 	insideEnv            []string
 	insideCertPath       string
 	orchestratorDaemonID string
+	workerLimits         workerResourceLimits
 	sandboxProbeRunner   func(context.Context, *config.Config) (sandboxReport, error)
 }
 
@@ -131,6 +132,9 @@ func GetPrimaryContainerPorts(portsBase int, flowID int64) []int {
 }
 
 func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Config) (DockerClient, error) {
+	if err := cfg.ValidateWorkerResourceLimits(); err != nil {
+		return nil, err
+	}
 	cli, err := client.New(client.FromEnv)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize docker client: %w", err)
@@ -141,6 +145,14 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 		return nil, fmt.Errorf("failed to get docker info: %w", err)
 	}
 	info := infoResult.Info
+	if cfg.DockerWorkerCPUs > 0 && !info.CPUCfsQuota {
+		_ = cli.Close()
+		return nil, fmt.Errorf("configured DOCKER_WORKER_CPUS requires Docker CPU quota support")
+	}
+	if cfg.DockerWorkerMemory > 0 && (!info.MemoryLimit || !info.SwapLimit) {
+		_ = cli.Close()
+		return nil, fmt.Errorf("configured DOCKER_WORKER_MEMORY requires Docker memory and swap limit support")
+	}
 
 	// Resolve which host socket (if any) gets bind-mounted into worker containers.
 	// Autodetection is skipped when DOCKER_INSIDE_HOST designates a daemon
@@ -205,6 +217,10 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 		insideEnv:            cfg.WorkerDockerEnv(),
 		insideCertPath:       cfg.WorkerDockerCertPath(),
 		orchestratorDaemonID: info.ID,
+		workerLimits: workerResourceLimits{
+			nanoCPUs: int64(cfg.DockerWorkerCPUs * 1e9),
+			memory:   cfg.DockerWorkerMemory,
+		},
 	}
 
 	// The probe needs a container, so the decision cannot be made until the
@@ -249,6 +265,12 @@ func (dc *dockerClient) RunContainer(
 ) (database.Container, error) {
 	if config == nil {
 		return database.Container{}, fmt.Errorf("no config found for container %s", containerName)
+	}
+	if hostConfig == nil {
+		hostConfig = &container.HostConfig{}
+	}
+	if err := dc.workerLimits.apply(hostConfig); err != nil {
+		return database.Container{}, fmt.Errorf("invalid worker resource limits: %w", err)
 	}
 
 	workDir := filepath.Join(dc.dataDir, fmt.Sprintf(containerLocalCwdTemplate, flowID))
@@ -335,10 +357,6 @@ func (dc *dockerClient) RunContainer(
 			config.Labels = make(map[string]string, len(dc.labels))
 		}
 		config.Labels[k] = v
-	}
-
-	if hostConfig == nil {
-		hostConfig = &container.HostConfig{}
 	}
 
 	// prevent containers from auto-starting after OS or docker daemon restart
@@ -988,6 +1006,11 @@ func (dc *dockerClient) IsContainerRunning(ctx context.Context, containerID stri
 		isOperational = isOperational && inspection.State.Health.Status != "unhealthy"
 	}
 
+	if isOperational {
+		if err := dc.workerLimits.check(inspection.HostConfig); err != nil {
+			return false, fmt.Errorf("container %s is incompatible with worker resource limits; stop and recreate it before reuse: %w", containerID, err)
+		}
+	}
 	return isOperational, nil
 }
 

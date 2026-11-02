@@ -127,6 +127,9 @@ func (dc *dockerClient) probeSandbox(ctx context.Context, cfg *config.Config) (s
 	// The work volume is the one thing a flow's worker has and this does not:
 	// it holds that flow's files and has no bearing on what the daemon allows.
 	containerConfig, hostConfig := WorkerSpec(cfg, image)
+	if err := dc.workerLimits.apply(hostConfig); err != nil {
+		return sandboxReport{}, fmt.Errorf("invalid sandbox resource limits: %w", err)
+	}
 	containerConfig.Env = append(containerConfig.Env, "PENTAGI_TEST_IMAGE="+image)
 	dc.applyWorkerDockerAccess(containerConfig, hostConfig)
 	if hostConfig.PidsLimit == nil {

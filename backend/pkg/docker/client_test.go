@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/crc32"
 	"math/rand"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -18,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -248,6 +252,214 @@ func TestClient_IsContainerRunning_ReportsRunningUntilTheContainerIsRemoved(t *t
 	running, err = dc.IsContainerRunning(t.Context(), containerID)
 	require.NoError(t, err, "a removed container is missing, not an inspection failure")
 	require.False(t, running)
+}
+
+func resourceLimitClient(t *testing.T, cpu, memory string, existing *container.HostConfig) (*dockerClient, <-chan *container.HostConfig) {
+	t.Helper()
+	captures := make(chan *container.HostConfig, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/_ping"):
+			w.Header().Set("API-Version", "1.55")
+		case strings.HasSuffix(r.URL.Path, "/info"):
+			_, _ = w.Write([]byte(`{"ID":"budget-fixture","CpuCfsQuota":true,"MemoryLimit":true,"SwapLimit":true}`))
+		case strings.HasSuffix(r.URL.Path, "/images/json"):
+			_, _ = w.Write([]byte(`[{"Id":"sha256:probe"}]`))
+		case strings.HasSuffix(r.URL.Path, "/containers/create"):
+			var request struct{ HostConfig *container.HostConfig }
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Error(err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			captures <- request.HostConfig
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"message":"fixture stops before container creation"}`))
+		case strings.HasSuffix(r.URL.Path, "/containers/existing/json"):
+			if err := json.NewEncoder(w).Encode(container.InspectResponse{State: &container.State{Running: true}, HostConfig: existing}); err != nil {
+				t.Error(err)
+			}
+		default:
+			t.Errorf("unexpected Docker request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("DOCKER_HOST", "tcp://"+server.Listener.Addr().String())
+	t.Setenv("DOCKER_API_VERSION", "1.55")
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+	t.Setenv("DOCKER_WORKER_CPUS", cpu)
+	t.Setenv("DOCKER_WORKER_MEMORY", memory)
+	t.Chdir(t.TempDir())
+	cfg, err := config.NewConfig()
+	require.NoError(t, err)
+	cfg.DataDir, cfg.DockerWorkDir = t.TempDir(), t.TempDir()
+	cfg.DockerInside, cfg.DockerNetwork, cfg.DockerDefaultImage = false, "", probeImage
+	dc, err := NewDockerClient(t.Context(), &containerRecorder{}, cfg)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = dc.(*dockerClient).client.Close() })
+	return dc.(*dockerClient), captures
+}
+
+func TestClient_NewDockerClient_RequiresOnlyConfiguredResourceControllers(t *testing.T) {
+	for _, tc := range []struct {
+		name, cpu, memory            string
+		cpuQuota, ram, swap, refused bool
+	}{
+		{name: "cpu controller required", cpu: "0.5", memory: "0", refused: true},
+		{name: "memory controller required", cpu: "0", memory: "268435456", swap: true, refused: true},
+		{name: "swap controller required", cpu: "0", memory: "268435456", ram: true, refused: true},
+		{name: "cpu only", cpu: "0.5", memory: "0", cpuQuota: true},
+		{name: "memory only", cpu: "0", memory: "268435456", ram: true, swap: true},
+		{name: "disabled ceilings", cpu: "0", memory: "0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if strings.HasSuffix(r.URL.Path, "/_ping") {
+					w.Header().Set("API-Version", "1.55")
+					return
+				}
+				if !strings.HasSuffix(r.URL.Path, "/info") {
+					t.Errorf("unexpected request %s", r.URL.Path)
+					w.WriteHeader(500)
+					return
+				}
+				if err := json.NewEncoder(w).Encode(map[string]any{"ID": "budget-fixture", "CpuCfsQuota": tc.cpuQuota, "MemoryLimit": tc.ram, "SwapLimit": tc.swap}); err != nil {
+					t.Error(err)
+				}
+			}))
+			t.Cleanup(server.Close)
+			t.Setenv("DOCKER_HOST", "tcp://"+server.Listener.Addr().String())
+			t.Setenv("DOCKER_API_VERSION", "1.55")
+			t.Setenv("DOCKER_TLS_VERIFY", "")
+			t.Setenv("DOCKER_CERT_PATH", "")
+			t.Setenv("DOCKER_WORKER_CPUS", tc.cpu)
+			t.Setenv("DOCKER_WORKER_MEMORY", tc.memory)
+			t.Chdir(t.TempDir())
+			cfg, err := config.NewConfig()
+			require.NoError(t, err)
+			cfg.DataDir, cfg.DockerWorkDir = t.TempDir(), t.TempDir()
+			cfg.DockerInside, cfg.DockerNetwork = false, ""
+			dc, err := NewDockerClient(t.Context(), &containerRecorder{}, cfg)
+			if tc.refused {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			if dc != nil {
+				_ = dc.(*dockerClient).client.Close()
+			}
+		})
+	}
+}
+
+func TestClient_RunContainer_EnforcesConfiguredWorkerBudgets(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		host        *container.HostConfig
+		cpu, memory int64
+		cpuCeiling  string
+	}{
+		{name: "nil host configuration", cpu: 500000000, memory: 268435456},
+		{name: "empty host configuration", host: &container.HostConfig{}, cpu: 500000000, memory: 268435456},
+		{name: "caller cannot raise ceilings", host: &container.HostConfig{Resources: container.Resources{NanoCPUs: 4e9, Memory: 4 << 30, MemorySwap: -1}}, cpu: 500000000, memory: 268435456},
+		{name: "stricter caller", host: &container.HostConfig{Resources: container.Resources{NanoCPUs: 250000000, Memory: 128 << 20}}, cpu: 250000000, memory: 134217728},
+		{name: "legacy quota above ceiling", host: &container.HostConfig{Resources: container.Resources{CPUQuota: 400000, CPUPeriod: 100000}}, cpu: 500000000, memory: 268435456},
+		{name: "stricter legacy cpu quota", host: &container.HostConfig{Resources: container.Resources{CPUQuota: 20000, CPUPeriod: 100000}}, cpu: 200000000, memory: 268435456},
+		{name: "fractional ceiling with legacy period", host: &container.HostConfig{Resources: container.Resources{CPUPeriod: 100000}}, cpu: 15630000, memory: 268435456, cpuCeiling: "0.01563"},
+		{name: "legacy quota default period", host: &container.HostConfig{Resources: container.Resources{CPUQuota: 10000}}, cpu: 100000000, memory: 268435456},
+		{name: "small valid legacy quota", host: &container.HostConfig{Resources: container.Resources{CPUQuota: 1000, CPUPeriod: 1000000}}, cpu: 1000000, memory: 268435456},
+		{name: "legacy quota stricter than nano cpus", host: &container.HostConfig{Resources: container.Resources{NanoCPUs: 250000000, CPUQuota: 1000, CPUPeriod: 100000}}, cpu: 10000000, memory: 268435456},
+		{name: "nano cpus stricter than legacy quota", host: &container.HostConfig{Resources: container.Resources{NanoCPUs: 250000000, CPUQuota: 40000, CPUPeriod: 100000}}, cpu: 250000000, memory: 268435456},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cpuCeiling := tc.cpuCeiling
+			if cpuCeiling == "" {
+				cpuCeiling = "0.5"
+			}
+			dc, captures := resourceLimitClient(t, cpuCeiling, "268435456", nil)
+			_, err := dc.RunContainer(t.Context(), "budget-probe", database.ContainerTypePrimary, 1, probeConfig(), tc.host)
+			require.ErrorContains(t, err, "fixture stops before container creation")
+			select {
+			case host := <-captures:
+				if host.CPUQuota > 0 {
+					period := host.CPUPeriod
+					if period == 0 {
+						period = 100000
+					}
+					require.Zero(t, host.NanoCPUs, "Docker rejects conflicting NanoCPUs and quota fields")
+					require.Equal(t, tc.cpu, host.CPUQuota*1000000000/period)
+				} else {
+					require.Equal(t, tc.cpu, host.NanoCPUs)
+					require.Zero(t, host.CPUPeriod)
+				}
+				require.Equal(t, tc.memory, host.Memory)
+				require.Equal(t, tc.memory, host.MemorySwap)
+				require.Equal(t, int64(2048), *host.PidsLimit)
+			default:
+				t.Fatal("Docker did not receive a worker configuration")
+			}
+		})
+	}
+}
+
+func TestClient_RunContainer_RejectsInvalidCPUPeriodsWithConfiguredCeiling(t *testing.T) {
+	for _, period := range []int64{-1, 999, 1000001} {
+		t.Run(strconv.FormatInt(period, 10), func(t *testing.T) {
+			dc, captures := resourceLimitClient(t, "0.5", "0", nil)
+			_, err := dc.RunContainer(t.Context(), "budget-probe", database.ContainerTypePrimary, 1, probeConfig(), &container.HostConfig{Resources: container.Resources{CPUQuota: 1000, CPUPeriod: period}})
+			require.ErrorContains(t, err, "period")
+			require.Empty(t, captures, "invalid limits must fail before Docker create")
+		})
+	}
+}
+
+func TestClient_RunContainer_DisabledWorkerBudgetsPreserveCallerResources(t *testing.T) {
+	dc, captures := resourceLimitClient(t, "0", "0", nil)
+	pids := int64(64)
+	resources := container.Resources{CPUQuota: 50000, CPUPeriod: 100000, Memory: 128 << 20, MemorySwap: -1, PidsLimit: &pids}
+	_, err := dc.RunContainer(t.Context(), "budget-probe", database.ContainerTypePrimary, 1, probeConfig(), &container.HostConfig{Resources: resources})
+	require.ErrorContains(t, err, "fixture stops before container creation")
+	require.Equal(t, resources, (<-captures).Resources)
+}
+
+func TestClient_IsContainerRunning_RejectsWorkersAboveConfiguredBudgets(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		resources  container.Resources
+		refused    bool
+		cpuCeiling string
+	}{
+		{name: "unlimited", refused: true},
+		{name: "cpu above ceiling", resources: container.Resources{NanoCPUs: 1e9, Memory: 128 << 20, MemorySwap: 128 << 20}, refused: true},
+		{name: "memory above ceiling", resources: container.Resources{NanoCPUs: 250000000, Memory: 512 << 20, MemorySwap: 512 << 20}, refused: true},
+		{name: "swap above ceiling", resources: container.Resources{NanoCPUs: 250000000, Memory: 128 << 20, MemorySwap: -1}, refused: true},
+		{name: "fractional legacy cpu ceiling", resources: container.Resources{CPUQuota: 1563, CPUPeriod: 100000, Memory: 128 << 20, MemorySwap: 128 << 20}, cpuCeiling: "0.01563"},
+		{name: "within ceilings", resources: container.Resources{NanoCPUs: 250000000, Memory: 128 << 20, MemorySwap: 128 << 20}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cpuCeiling := tc.cpuCeiling
+			if cpuCeiling == "" {
+				cpuCeiling = "0.5"
+			}
+			dc, _ := resourceLimitClient(t, cpuCeiling, "268435456", &container.HostConfig{Resources: tc.resources})
+			running, err := dc.IsContainerRunning(t.Context(), "existing")
+			if tc.refused {
+				require.Error(t, err)
+				require.False(t, running)
+			} else {
+				require.NoError(t, err)
+				require.True(t, running)
+			}
+		})
+	}
+	dc, _ := resourceLimitClient(t, "0", "0", &container.HostConfig{})
+	running, err := dc.IsContainerRunning(t.Context(), "existing")
+	require.NoError(t, err)
+	require.True(t, running)
 }
 
 // containerRecorder captures RunContainer's database writes; the nil Querier panics on any other query.

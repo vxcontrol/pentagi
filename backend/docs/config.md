@@ -437,6 +437,17 @@ These settings control how PentAGI interacts with Docker, which is used for term
 | DockerDefaultImageForPentest | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for penetration testing tasks |
 | TerminalToolTimeout          | `TERMINAL_TOOL_TIMEOUT`            | `1200`                 | Default execution timeout in seconds applied when an agent requests `timeout=0` or a negative value. Accepted range: `1`–`10800` (3 hours). Values `<= 0` or above `10800` are clamped to the 3-hour maximum. Negative values are treated identically to `0`. |
 
+### Worker Resource Ceilings
+
+| Option | Environment Variable | Default Value | Description |
+| ------ | -------------------- | ------------- | ----------- |
+| DockerWorkerCPUs | `DOCKER_WORKER_CPUS` | `0` | Optional CPU ceiling per worker, in fractional CPUs; `0` disables it, otherwise at least `0.01`. |
+| DockerWorkerMemory | `DOCKER_WORKER_MEMORY` | `0` | Optional RAM ceiling per worker, in bytes; `0` disables it, otherwise at least `6291456` (6 MiB). Enabling this ceiling disables worker swap. |
+
+These settings apply to every worker and the startup sandbox probe. For example, `DOCKER_WORKER_CPUS=2` and `DOCKER_WORKER_MEMORY=4294967296` cap each at 2 CPUs and 4 GiB RAM. Stricter caller limits are retained, including legacy CPU quota/period limits; memory ceilings set `MemorySwap = Memory` and cap any memory reservation to the effective RAM ceiling. CPU and memory can be enabled independently. Invalid values fail configuration validation, and enabled ceilings require Docker to report the corresponding CPU quota or memory and swap controllers. Rootless Docker requires cgroup delegation for these controllers.
+
+After enabling or lowering a ceiling, stop affected flows and recreate their workers before reuse. Running workers outside the configured ceilings are rejected with a recreation error; they are not deleted or silently updated. These limits are per worker, so concurrent flows can consume the sum of their budgets. They do not constrain the controller service, disk or network use, or separate containers created through an agent-accessible Docker API.
+
 ### Worker Docker Access (`DOCKER_INSIDE_*`)
 
 `DOCKER_HOST`, `DOCKER_TLS_VERIFY` and `DOCKER_CERT_PATH` tell **PentAGI itself** which daemon to create worker containers on. The `DOCKER_INSIDE_*` trio is the mirror image: it tells a **worker container** which daemon *it* may talk to. Both sets are independent — sandboxes can be pointed at a different daemon than the one that spawned them.
