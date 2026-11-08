@@ -942,6 +942,37 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		}
 	}
 
+	// Knowledge base search: the SHARED knowledge base the user curated (separate
+	// from the agent's own long-term memory). Exposed to the assistant in both the
+	// agent-orchestrated and the direct (useAgents=false) paths so it can always
+	// pull curated documents into its reasoning.
+	knowledgeSearch := NewKnowledgeSearchTool(
+		fte.userID, fte.flowID, nil, nil,
+		fte.replacer,
+		fte.store,
+		fte.embedder,
+		fte.db,
+		fte.cfg.EmbeddingMaxTextBytes,
+		fte.vslp,
+		fte.knp,
+	)
+	if knowledgeSearch.IsAvailable() {
+		definitions = append(definitions, registryDefinitions[KnowledgeSearchToolName])
+		handlers[KnowledgeSearchToolName] = knowledgeSearch.Handle
+	}
+
+	// DEBUG (knowledge_search availability): log every tool name handed to the
+	// assistant so we can confirm knowledge_search is actually offered to the LLM.
+	{
+		names := make([]string, 0, len(definitions))
+		for _, d := range definitions {
+			names = append(names, d.Name)
+		}
+		logrus.WithField("flow_id", fte.flowID).WithField("use_agents", cfg.UseAgents).
+			Infof("assistant executor registered tools: %v (knowledge_search available=%v, store set=%v)",
+				names, knowledgeSearch.IsAvailable(), fte.store != nil)
+	}
+
 	webSearch := buildWebSearch(fte, nil, nil, cfg.Summarizer)
 	if webSearch.IsAvailable() {
 		definitions = append(definitions, registryDefinitions[WebSearchToolName])

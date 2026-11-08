@@ -105,6 +105,7 @@ var PromptVariables = map[PromptType][]string{
 		"SearchGuideToolName",
 		"SearchAnswerToolName",
 		"SearchCodeToolName",
+		"KnowledgeSearchToolName",
 		"SummarizationToolName",
 		"SummarizedContentPrefix",
 		"UseAgents",

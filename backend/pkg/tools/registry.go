@@ -51,6 +51,7 @@ const (
 	SubmitFlowInputToolName    = "submit_flow_input"
 	PatchFlowSubtasksToolName  = "patch_flow_subtasks"
 	WaitFlowCompletionToolName = "wait_flow_completion"
+	KnowledgeSearchToolName    = "knowledge_search"
 )
 
 type ToolType int
@@ -128,6 +129,7 @@ var toolsTypeMapping = map[string]ToolType{
 	SearchCodeToolName:         SearchVectorDbToolType,
 	StoreCodeToolName:          StoreVectorDbToolType,
 	GraphitiSearchToolName:     SearchVectorDbToolType,
+	KnowledgeSearchToolName:    SearchVectorDbToolType,
 	ReportResultToolName:       StoreAgentResultToolType,
 	SubtaskListToolName:        StoreAgentResultToolType,
 	SubtaskPatchToolName:       StoreAgentResultToolType,
@@ -296,7 +298,10 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 			"to enhance semantic matching and retrieval accuracy. Multiple queries allow exploring different semantic angles and improve recall. " +
 			"Results from all queries are merged, deduplicated, and ranked by relevance score. This function is ideal when you need to retrieve specific information " +
 			"to assist in generating accurate and informative responses. If Task ID or Subtask ID are known, " +
-			"they can be used as strict filters to further refine the search results and improve relevancy.",
+			"they can be used as strict filters to further refine the search results and improve relevancy. " +
+			"NOTE: This searches ONLY content the AGENT itself generated in past work (your own long-term memory). " +
+			"It does NOT search the user's uploaded/shared KNOWLEDGE BASE. For documents the user explicitly uploaded, " +
+			"use the `knowledge_search` tool instead.",
 		Parameters: reflector.Reflect(&SearchInMemoryAction{}),
 	},
 	SearchGuideToolName: {
@@ -305,7 +310,9 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 			"Formulate each query with sufficient context, intent, and detailed descriptions of the guides you need to enhance semantic matching and " +
 			"retrieval accuracy. Multiple queries allow exploring different aspects of the guide topic and improve search coverage. " +
 			"Specify the type of guide required to further refine the search. Results from all queries are merged, deduplicated, and ranked by relevance score. " +
-			"This function is ideal when you need to retrieve specific guides to assist in accomplishing tasks or solving issues.",
+			"This function is ideal when you need to retrieve specific guides to assist in accomplishing tasks or solving issues. " +
+			"NOTE: This searches ONLY guides the AGENT itself produced in past work. It does NOT search the user's uploaded/shared " +
+			"KNOWLEDGE BASE — for that, use the `knowledge_search` tool.",
 		Parameters: reflector.Reflect(&SearchGuideAction{}),
 	},
 	StoreGuideToolName: {
@@ -320,7 +327,9 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 			"Formulate each query with sufficient context, intent, and detailed descriptions of what you want to find and why you need it " +
 			"to enhance semantic matching and retrieval accuracy. Multiple queries allow exploring different formulations and improve search coverage. " +
 			"Specify the type of answer required to further refine the search. Results from all queries are merged, deduplicated, and ranked by relevance score. " +
-			"This function is ideal when you need to retrieve specific answers to assist in tasks, solve issues, or answer questions.",
+			"This function is ideal when you need to retrieve specific answers to assist in tasks, solve issues, or answer questions. " +
+			"NOTE: This searches ONLY answers the AGENT itself produced in past work. It does NOT search the user's uploaded/shared " +
+			"KNOWLEDGE BASE — for that, use the `knowledge_search` tool.",
 		Parameters: reflector.Reflect(&SearchAnswerAction{}),
 	},
 	StoreAnswerToolName: {
@@ -335,7 +344,9 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 			"Formulate each query with sufficient context, intent, and detailed descriptions of what you want to achieve with the code and what should be included, " +
 			"to enhance semantic matching and retrieval accuracy. Multiple queries allow exploring different code patterns and use cases. " +
 			"Specify the programming language to further refine the search. Results from all queries are merged, deduplicated, and ranked by relevance score. " +
-			"This function is ideal when you need to retrieve specific code examples to assist in development tasks or solve programming issues.",
+			"This function is ideal when you need to retrieve specific code examples to assist in development tasks or solve programming issues. " +
+			"NOTE: This searches ONLY code the AGENT itself produced in past work. It does NOT search the user's uploaded/shared " +
+			"KNOWLEDGE BASE — for that, use the `knowledge_search` tool.",
 		Parameters: reflector.Reflect(&SearchCodeAction{}),
 	},
 	StoreCodeToolName: {
@@ -354,6 +365,16 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 			"Use this to avoid repeating failed approaches, reuse successful exploitation techniques, understand entity relationships, " +
 			"and build on previous findings within the same penetration testing engagement.",
 		Parameters: reflector.Reflect(&GraphitiSearchAction{}),
+	},
+	KnowledgeSearchToolName: {
+		Name: KnowledgeSearchToolName,
+		Description: "Search the SHARED KNOWLEDGE BASE for relevant documents by natural-language query. " +
+			"The knowledge base holds curated documents that users explicitly uploaded (procedures, facts, policies, reference material) " +
+			"and is separate from the agent's long-term memory. Use this whenever the user's task depends on information that may have " +
+			"been stored in the knowledge base. Returns the most relevant documents with their full content. ALWAYS query in English. " +
+			"This is the ONLY tool that searches the user's curated knowledge base; the search_answer / search_guide / search_code / " +
+			"search_in_memory tools search only the agent's own past work and will NOT find user-uploaded documents.",
+		Parameters: reflector.Reflect(&KnowledgeSearchAction{}),
 	},
 	MemoristToolName: {
 		Name:        MemoristToolName,
@@ -467,7 +488,8 @@ func getMessageType(name string) database.MsglogType {
 		return database.MsglogTypeBrowser
 	case MemoristToolName, SearchToolName, GoogleToolName, DuckDuckGoToolName, TavilyToolName, FirecrawlToolName,
 		TraversaalToolName, PerplexityToolName, SearxngToolName, SploitusToolName, WebSearchToolName,
-		SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName, GraphitiSearchToolName:
+		SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName, GraphitiSearchToolName,
+		KnowledgeSearchToolName:
 		return database.MsglogTypeSearch
 	case AdviceToolName:
 		return database.MsglogTypeAdvice

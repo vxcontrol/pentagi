@@ -343,6 +343,7 @@ func (ap *assistantProvider) getAssistantSystemPrompt(ctx context.Context) (stri
 		"SearchGuideToolName":        tools.SearchGuideToolName,
 		"SearchAnswerToolName":       tools.SearchAnswerToolName,
 		"SearchCodeToolName":         tools.SearchCodeToolName,
+		"KnowledgeSearchToolName":    tools.KnowledgeSearchToolName,
 		"SummarizationToolName":      cast.SummarizationToolName,
 		"SummarizedContentPrefix":    strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
 		"UseAgents":                  useAgents,

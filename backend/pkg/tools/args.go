@@ -315,6 +315,12 @@ type StoreCodeAction struct {
 	Message     string   `json:"message" jsonschema:"required,title=Store code message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the code sample. Written in the engagement language declared by your system prompt."`
 }
 
+type KnowledgeSearchAction struct {
+	Query   string `json:"query" jsonschema:"required,title=Knowledge base query" jsonschema_description:"Semantic search query for the SHARED KNOWLEDGE BASE — the curated documents that users explicitly uploaded (procedures, facts, policies, reference material). This is separate from the agent's long-term memory. ALWAYS write the query in English because the knowledge base is indexed in English. Use this whenever the task depends on information that may have been stored in the knowledge base; it returns the most relevant documents with their full content."`
+	Limit   int    `json:"limit,omitempty" jsonschema:"title=Max results" jsonschema_description:"Maximum number of documents to return. Default 5."`
+	Message string `json:"message" jsonschema:"required,title=Knowledge search message" jsonschema_description:"Engagement-log entry — a 1-2 sentence commentary on the query. Written in the engagement language declared by your system prompt."`
+}
+
 type MaintenanceAction struct {
 	Question string `json:"question" jsonschema:"required" jsonschema_description:"Technical-channel payload — task description for the DevOps team member to maintain the local environment and tools inside the docker container. Always written in English; never translated."`
 	Message  string `json:"message" jsonschema:"required,title=Maintenance task message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the maintenance task. Written in the engagement language declared by your system prompt."`
