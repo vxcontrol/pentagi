@@ -4,9 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
-
-	"pentagi/pkg/observability/langfuse/api"
 )
 
 const (
@@ -37,7 +36,9 @@ type embedding struct {
 	ObservationID       string `json:"observation_id"`
 	ParentObservationID string `json:"parent_observation_id"`
 
-	observer enqueue `json:"-"`
+	traceCtx *TraceContext `json:"-"`
+	endOnce  sync.Once     `json:"-"`
+	observer enqueue       `json:"-"`
 }
 
 type EmbeddingOption func(*embedding)
@@ -51,6 +52,12 @@ func withEmbeddingTraceID(traceID string) EmbeddingOption {
 func withEmbeddingParentObservationID(parentObservationID string) EmbeddingOption {
 	return func(e *embedding) {
 		e.ParentObservationID = parentObservationID
+	}
+}
+
+func withEmbeddingTraceContext(traceCtx *TraceContext) EmbeddingOption {
+	return func(e *embedding) {
+		e.traceCtx = cloneTraceContext(traceCtx)
 	}
 }
 
@@ -135,63 +142,42 @@ func newEmbedding(observer enqueue, opts ...EmbeddingOption) Embedding {
 		opt(e)
 	}
 
-	obsCreate := &api.IngestionEvent{IngestionEventFifteen: &api.IngestionEventFifteen{
-		ID:        newSpanID(),
-		Timestamp: getTimeRefString(e.StartTime),
-		Type:      api.IngestionEventFifteenType(ingestionCreateEmbedding).Ptr(),
-		Body: &api.CreateGenerationBody{
-			ID:                  getStringRef(e.ObservationID),
-			TraceID:             getStringRef(e.TraceID),
-			ParentObservationID: getStringRef(e.ParentObservationID),
-			Name:                getStringRef(e.Name),
-			Metadata:            e.Metadata,
-			Input:               convertInput(e.Input, nil),
-			Output:              convertOutput(e.Output),
-			StartTime:           e.StartTime,
-			EndTime:             e.EndTime,
-			Level:               e.Level.ToLangfuse(),
-			StatusMessage:       e.Status,
-			Version:             e.Version,
-			Model:               e.Model,
-		},
-	}}
-
-	e.observer.enqueue(obsCreate)
-
 	return e
 }
 
 func (e *embedding) End(opts ...EmbeddingOption) {
-	id := e.ObservationID
-	startTime := e.StartTime
-	e.EndTime = getCurrentTimeRef()
-	for _, opt := range opts {
-		opt(e)
-	}
+	e.endOnce.Do(func() {
+		id := e.ObservationID
+		startTime := e.StartTime
+		e.EndTime = getCurrentTimeRef()
+		for _, opt := range opts {
+			opt(e)
+		}
 
-	// preserve the original observation ID and start time
-	e.ObservationID = id
-	e.StartTime = startTime
+		// preserve the original observation ID and start time
+		e.ObservationID = id
+		e.StartTime = startTime
 
-	embeddingUpdate := &api.IngestionEvent{IngestionEventFifteen: &api.IngestionEventFifteen{
-		ID:        newSpanID(),
-		Timestamp: getTimeRefString(e.EndTime),
-		Type:      api.IngestionEventFifteenType(ingestionCreateEmbedding).Ptr(),
-		Body: &api.CreateGenerationBody{
-			ID:            getStringRef(e.ObservationID),
-			Name:          getStringRef(e.Name),
-			Metadata:      e.Metadata,
-			Input:         convertInput(e.Input, nil),
-			Output:        convertOutput(e.Output),
-			EndTime:       e.EndTime,
-			Level:         e.Level.ToLangfuse(),
-			StatusMessage: e.Status,
-			Version:       e.Version,
-			Model:         e.Model,
-		},
-	}}
+		otelSpan := buildOtelSpan(otelSpanParams{
+			TraceID:             e.TraceID,
+			ObservationID:       e.ObservationID,
+			ParentObservationID: e.ParentObservationID,
+			Name:                e.Name,
+			ObservationType:     otelObservationTypeEmbedding,
+			StartTime:           e.StartTime,
+			EndTime:             e.EndTime,
+			Level:               e.Level,
+			Status:              e.Status,
+			Version:             e.Version,
+			Input:               convertInput(e.Input, nil),
+			Output:              convertOutput(e.Output),
+			Metadata:            e.Metadata,
+			Model:               e.Model,
+			TraceCtx:            e.traceCtx,
+		})
 
-	e.observer.enqueue(embeddingUpdate)
+		e.observer.enqueue(otelSpan)
+	})
 }
 
 func (e *embedding) String() string {
@@ -203,10 +189,15 @@ func (e *embedding) MarshalJSON() ([]byte, error) {
 }
 
 func (e *embedding) Observation(ctx context.Context) (context.Context, Observation) {
+	traceCtx := e.traceCtx
+	if parent, ok := getObservationContext(ctx); ok && parent.TraceCtx != nil {
+		traceCtx = mergeTraceContext(parent.TraceCtx, traceCtx)
+	}
 	obs := &observation{
 		obsCtx: observationContext{
 			TraceID:       e.TraceID,
 			ObservationID: e.ObservationID,
+			TraceCtx:      cloneTraceContext(traceCtx),
 		},
 		observer: e.observer,
 	}

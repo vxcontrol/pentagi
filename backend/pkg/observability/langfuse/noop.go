@@ -34,10 +34,21 @@ func (o *noopObserver) NewObservation(
 		}
 	}
 
+	var mergedTraceCtx *TraceContext
+	if parentObsCtxFound && parentObsCtx.TraceCtx != nil {
+		mergedTraceCtx = parentObsCtx.TraceCtx
+	}
+	if obsCtx.TraceCtx != nil {
+		mergedTraceCtx = mergeTraceContext(mergedTraceCtx, obsCtx.TraceCtx)
+	} else {
+		mergedTraceCtx = cloneTraceContext(mergedTraceCtx)
+	}
+
 	obs := &observation{
 		obsCtx: observationContext{
 			TraceID:       obsCtx.TraceID,
 			ObservationID: obsCtx.ObservationID,
+			TraceCtx:      mergedTraceCtx,
 		},
 		observer: o,
 	}
@@ -53,5 +64,8 @@ func (o *noopObserver) ForceFlush(ctx context.Context) error {
 	return nil
 }
 
-func (o *noopObserver) enqueue(event *api.IngestionEvent) {
+func (o *noopObserver) enqueue(span *api.OtelSpan) {
+}
+
+func (o *noopObserver) enqueueScore(score *api.CreateScoreRequest) {
 }

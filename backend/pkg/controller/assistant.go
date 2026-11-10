@@ -180,27 +180,29 @@ func buildAssistantWorker(
 		pub.AssistantUpdated(cleanupCtx, failed)
 	}()
 
-	ctx, observation := obs.Observer.NewObservation(ctx,
-		langfuse.WithObservationTraceContext(
-			langfuse.WithTraceName(fmt.Sprintf("%s%d flow %d assistant worker", awc.cfg.TenantLabel(), awc.flowID, assistant.ID)),
-			langfuse.WithTraceUserID(tenantUserID(awc.cfg, user.Mail)),
-			langfuse.WithTraceTags(tenantTags(awc.cfg, "controller", "assistant")),
-			langfuse.WithTraceInput(awc.input),
-			langfuse.WithTraceSessionID(awc.cfg.ScopedName(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID))),
-			langfuse.WithTraceMetadata(tenantMeta(awc.cfg, langfuse.Metadata{
-				"assistant_id":  assistant.ID,
-				"flow_id":       awc.flowID,
-				"user_id":       awc.userID,
-				"user_email":    user.Mail,
-				"user_name":     user.Name,
-				"user_hash":     user.Hash,
-				"user_role":     user.RoleName,
-				"provider_name": awc.prvname.String(),
-				"provider_type": awc.prvtype.String(),
-			})),
-		),
+	traceCtxOpt := langfuse.WithObservationTraceContext(
+		langfuse.WithTraceName(fmt.Sprintf("%s%d flow %d assistant worker", awc.cfg.TenantLabel(), awc.flowID, assistant.ID)),
+		langfuse.WithTraceUserID(tenantUserID(awc.cfg, user.Mail)),
+		langfuse.WithTraceTags(tenantTags(awc.cfg, "controller", "assistant")),
+		langfuse.WithTraceInput(awc.input),
+		langfuse.WithTraceSessionID(awc.cfg.ScopedName(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID))),
+		langfuse.WithTraceMetadata(tenantMeta(awc.cfg, langfuse.Metadata{
+			"assistant_id":  assistant.ID,
+			"flow_id":       awc.flowID,
+			"user_id":       awc.userID,
+			"user_email":    user.Mail,
+			"user_name":     user.Name,
+			"user_hash":     user.Hash,
+			"user_role":     user.RoleName,
+			"provider_name": awc.prvname.String(),
+			"provider_type": awc.prvtype.String(),
+		})),
 	)
-	assistantSpan := observation.Span(langfuse.WithSpanName("prepare assistant worker"))
+	ctx, observation := obs.Observer.NewObservation(ctx, traceCtxOpt)
+	assistantSpan := observation.Span(
+		langfuse.WithSpanName("prepare assistant worker"),
+		langfuse.WithSpanInput(awc.input),
+	)
 	ctx, _ = assistantSpan.Observation(ctx)
 
 	aslw, err := awc.aslc.NewFlowAssistantLog(ctx, awc.flowID, assistant.ID, pub)
@@ -274,7 +276,10 @@ func buildAssistantWorker(
 	executor.SetGraphitiClient(awc.provs.GraphitiClient())
 
 	ctx, cancel := context.WithCancel(context.Background())
-	ctx, _ = obs.Observer.NewObservation(ctx, langfuse.WithObservationTraceID(observation.TraceID()))
+	ctx, _ = obs.Observer.NewObservation(ctx,
+		langfuse.WithObservationTraceID(observation.TraceID()),
+		traceCtxOpt,
+	)
 	aw := &assistantWorker{
 		id:      assistant.ID,
 		flowID:  awc.flowID,
@@ -364,24 +369,26 @@ func LoadAssistantWorker(
 		return nil, fmt.Errorf("failed to get flow primary container: %w", err)
 	}
 
+	traceCtxOpt := langfuse.WithObservationTraceContext(
+		langfuse.WithTraceName(fmt.Sprintf("%s%d flow %d assistant worker", awc.cfg.TenantLabel(), awc.flowID, assistant.ID)),
+		langfuse.WithTraceUserID(tenantUserID(awc.cfg, user.Mail)),
+		langfuse.WithTraceTags(tenantTags(awc.cfg, "controller", "assistant")),
+		langfuse.WithTraceSessionID(awc.cfg.ScopedName(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID))),
+		langfuse.WithTraceMetadata(tenantMeta(awc.cfg, langfuse.Metadata{
+			"assistant_id":  assistant.ID,
+			"flow_id":       awc.flowID,
+			"user_id":       awc.userID,
+			"user_email":    user.Mail,
+			"user_name":     user.Name,
+			"user_hash":     user.Hash,
+			"user_role":     user.RoleName,
+			"provider_name": assistant.ModelProviderName,
+			"provider_type": assistant.ModelProviderType,
+		})),
+	)
 	ctx, observation := obs.Observer.NewObservation(ctx,
-		langfuse.WithObservationTraceContext(
-			langfuse.WithTraceName(fmt.Sprintf("%s%d flow %d assistant worker", awc.cfg.TenantLabel(), awc.flowID, assistant.ID)),
-			langfuse.WithTraceUserID(tenantUserID(awc.cfg, user.Mail)),
-			langfuse.WithTraceTags(tenantTags(awc.cfg, "controller", "assistant")),
-			langfuse.WithTraceSessionID(awc.cfg.ScopedName(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID))),
-			langfuse.WithTraceMetadata(tenantMeta(awc.cfg, langfuse.Metadata{
-				"assistant_id":  assistant.ID,
-				"flow_id":       awc.flowID,
-				"user_id":       awc.userID,
-				"user_email":    user.Mail,
-				"user_name":     user.Name,
-				"user_hash":     user.Hash,
-				"user_role":     user.RoleName,
-				"provider_name": assistant.ModelProviderName,
-				"provider_type": assistant.ModelProviderType,
-			})),
-		),
+		langfuse.WithObservationTraceID(assistant.TraceID.String),
+		traceCtxOpt,
 	)
 	assistantSpan := observation.Span(langfuse.WithSpanName("prepare assistant worker"))
 	ctx, _ = assistantSpan.Observation(ctx)
@@ -445,7 +452,10 @@ func LoadAssistantWorker(
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	ctx, _ = obs.Observer.NewObservation(ctx, langfuse.WithObservationTraceID(observation.TraceID()))
+	ctx, _ = obs.Observer.NewObservation(ctx,
+		langfuse.WithObservationTraceID(observation.TraceID()),
+		traceCtxOpt,
+	)
 	aw := &assistantWorker{
 		id:      assistant.ID,
 		flowID:  awc.flowID,

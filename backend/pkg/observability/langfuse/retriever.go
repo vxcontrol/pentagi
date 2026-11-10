@@ -4,9 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
-
-	"pentagi/pkg/observability/langfuse/api"
 
 	"github.com/vxcontrol/langchaingo/llms"
 )
@@ -41,7 +40,9 @@ type retriever struct {
 	ObservationID       string `json:"observation_id"`
 	ParentObservationID string `json:"parent_observation_id"`
 
-	observer enqueue `json:"-"`
+	traceCtx *TraceContext `json:"-"`
+	endOnce  sync.Once     `json:"-"`
+	observer enqueue       `json:"-"`
 }
 
 type RetrieverOption func(*retriever)
@@ -55,6 +56,12 @@ func withRetrieverTraceID(traceID string) RetrieverOption {
 func withRetrieverParentObservationID(parentObservationID string) RetrieverOption {
 	return func(r *retriever) {
 		r.ParentObservationID = parentObservationID
+	}
+}
+
+func withRetrieverTraceContext(traceCtx *TraceContext) RetrieverOption {
+	return func(r *retriever) {
+		r.traceCtx = cloneTraceContext(traceCtx)
 	}
 }
 
@@ -151,65 +158,43 @@ func newRetriever(observer enqueue, opts ...RetrieverOption) Retriever {
 		opt(r)
 	}
 
-	obsCreate := &api.IngestionEvent{IngestionEventThirteen: &api.IngestionEventThirteen{
-		ID:        newSpanID(),
-		Timestamp: getTimeRefString(r.StartTime),
-		Type:      api.IngestionEventThirteenType(ingestionCreateRetriever).Ptr(),
-		Body: &api.CreateGenerationBody{
-			ID:                  getStringRef(r.ObservationID),
-			TraceID:             getStringRef(r.TraceID),
-			ParentObservationID: getStringRef(r.ParentObservationID),
-			Name:                getStringRef(r.Name),
-			Metadata:            r.Metadata,
-			Input:               convertInput(r.Input, r.Tools),
-			Output:              convertOutput(r.Output),
-			StartTime:           r.StartTime,
-			EndTime:             r.EndTime,
-			Level:               r.Level.ToLangfuse(),
-			StatusMessage:       r.Status,
-			Version:             r.Version,
-			Model:               r.Model,
-			ModelParameters:     r.ModelParameters.ToLangfuse(),
-		},
-	}}
-
-	r.observer.enqueue(obsCreate)
-
 	return r
 }
 
 func (r *retriever) End(opts ...RetrieverOption) {
-	id := r.ObservationID
-	startTime := r.StartTime
-	r.EndTime = getCurrentTimeRef()
-	for _, opt := range opts {
-		opt(r)
-	}
+	r.endOnce.Do(func() {
+		id := r.ObservationID
+		startTime := r.StartTime
+		r.EndTime = getCurrentTimeRef()
+		for _, opt := range opts {
+			opt(r)
+		}
 
-	// preserve the original observation ID and start time
-	r.ObservationID = id
-	r.StartTime = startTime
+		// preserve the original observation ID and start time
+		r.ObservationID = id
+		r.StartTime = startTime
 
-	retrieverUpdate := &api.IngestionEvent{IngestionEventThirteen: &api.IngestionEventThirteen{
-		ID:        newSpanID(),
-		Timestamp: getTimeRefString(r.EndTime),
-		Type:      api.IngestionEventThirteenType(ingestionCreateRetriever).Ptr(),
-		Body: &api.CreateGenerationBody{
-			ID:              getStringRef(r.ObservationID),
-			Name:            getStringRef(r.Name),
-			Metadata:        r.Metadata,
-			Input:           convertInput(r.Input, r.Tools),
-			Output:          convertOutput(r.Output),
-			EndTime:         r.EndTime,
-			Level:           r.Level.ToLangfuse(),
-			StatusMessage:   r.Status,
-			Version:         r.Version,
-			Model:           r.Model,
-			ModelParameters: r.ModelParameters.ToLangfuse(),
-		},
-	}}
+		otelSpan := buildOtelSpan(otelSpanParams{
+			TraceID:             r.TraceID,
+			ObservationID:       r.ObservationID,
+			ParentObservationID: r.ParentObservationID,
+			Name:                r.Name,
+			ObservationType:     otelObservationTypeRetriever,
+			StartTime:           r.StartTime,
+			EndTime:             r.EndTime,
+			Level:               r.Level,
+			Status:              r.Status,
+			Version:             r.Version,
+			Input:               convertInput(r.Input, r.Tools),
+			Output:              convertOutput(r.Output),
+			Metadata:            r.Metadata,
+			Model:               r.Model,
+			ModelParameters:     r.ModelParameters,
+			TraceCtx:            r.traceCtx,
+		})
 
-	r.observer.enqueue(retrieverUpdate)
+		r.observer.enqueue(otelSpan)
+	})
 }
 
 func (r *retriever) String() string {
@@ -221,10 +206,15 @@ func (r *retriever) MarshalJSON() ([]byte, error) {
 }
 
 func (r *retriever) Observation(ctx context.Context) (context.Context, Observation) {
+	traceCtx := r.traceCtx
+	if parent, ok := getObservationContext(ctx); ok && parent.TraceCtx != nil {
+		traceCtx = mergeTraceContext(parent.TraceCtx, traceCtx)
+	}
 	obs := &observation{
 		obsCtx: observationContext{
 			TraceID:       r.TraceID,
 			ObservationID: r.ObservationID,
+			TraceCtx:      cloneTraceContext(traceCtx),
 		},
 		observer: r.observer,
 	}

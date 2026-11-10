@@ -7,8 +7,9 @@ type ObservationContextKey int
 var observationContextKey ObservationContextKey
 
 type observationContext struct {
-	TraceID       string `json:"trace_id"`
-	ObservationID string `json:"observation_id"`
+	TraceID       string        `json:"trace_id"`
+	ObservationID string        `json:"observation_id"`
+	TraceCtx      *TraceContext `json:"trace_ctx,omitempty"`
 }
 
 func getObservationContext(ctx context.Context) (observationContext, bool) {

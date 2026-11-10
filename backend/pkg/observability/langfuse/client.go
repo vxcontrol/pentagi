@@ -15,7 +15,11 @@ import (
 	"pentagi/pkg/observability/langfuse/api/option"
 )
 
-const InstrumentationVersion = "2.0.0"
+const (
+	InstrumentationVersion = "2.0.0"
+	IngestionVersion       = "4"
+	IngestionVersionHeader = "x-langfuse-ingestion-version"
+)
 
 type AnnotationQueuesClient interface {
 	Createqueue(ctx context.Context, request *api.CreateAnnotationQueueRequest, opts ...option.RequestOption) (*api.AnnotationQueue, error)
@@ -315,6 +319,7 @@ func NewClient(opts ...ClientContextOption) (*Client, error) {
 			"x_langfuse_sdk_version": []string{InstrumentationVersion},
 			"x_langfuse_public_key":  []string{clientCtx.PublicKey},
 			"x_langfuse_project_id":  []string{clientCtx.ProjectID},
+			IngestionVersionHeader:   []string{IngestionVersion},
 		}),
 	}
 

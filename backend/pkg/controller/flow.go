@@ -188,26 +188,28 @@ func buildFlowWorker(
 		return nil, fmt.Errorf("failed to get user %d: %w", fwc.userID, err)
 	}
 
-	ctx, observation := obs.Observer.NewObservation(ctx,
-		langfuse.WithObservationTraceContext(
-			langfuse.WithTraceName(fmt.Sprintf("%s%d flow worker", fwc.cfg.TenantLabel(), flow.ID)),
-			langfuse.WithTraceUserID(tenantUserID(fwc.cfg, user.Mail)),
-			langfuse.WithTraceTags(tenantTags(fwc.cfg, "controller", "flow")),
-			langfuse.WithTraceInput(fwc.input),
-			langfuse.WithTraceSessionID(fwc.cfg.ScopedName(fmt.Sprintf("flow-%d", flow.ID))),
-			langfuse.WithTraceMetadata(tenantMeta(fwc.cfg, langfuse.Metadata{
-				"flow_id":       flow.ID,
-				"user_id":       fwc.userID,
-				"user_email":    user.Mail,
-				"user_name":     user.Name,
-				"user_hash":     user.Hash,
-				"user_role":     user.RoleName,
-				"provider_name": fwc.prvname.String(),
-				"provider_type": fwc.prvtype.String(),
-			})),
-		),
+	traceCtxOpt := langfuse.WithObservationTraceContext(
+		langfuse.WithTraceName(fmt.Sprintf("%s%d flow worker", fwc.cfg.TenantLabel(), flow.ID)),
+		langfuse.WithTraceUserID(tenantUserID(fwc.cfg, user.Mail)),
+		langfuse.WithTraceTags(tenantTags(fwc.cfg, "controller", "flow")),
+		langfuse.WithTraceInput(fwc.input),
+		langfuse.WithTraceSessionID(fwc.cfg.ScopedName(fmt.Sprintf("flow-%d", flow.ID))),
+		langfuse.WithTraceMetadata(tenantMeta(fwc.cfg, langfuse.Metadata{
+			"flow_id":       flow.ID,
+			"user_id":       fwc.userID,
+			"user_email":    user.Mail,
+			"user_name":     user.Name,
+			"user_hash":     user.Hash,
+			"user_role":     user.RoleName,
+			"provider_name": fwc.prvname.String(),
+			"provider_type": fwc.prvtype.String(),
+		})),
 	)
-	flowSpan := observation.Span(langfuse.WithSpanName("prepare flow worker"))
+	ctx, observation := obs.Observer.NewObservation(ctx, traceCtxOpt)
+	flowSpan := observation.Span(
+		langfuse.WithSpanName("prepare flow worker"),
+		langfuse.WithSpanInput(fwc.input),
+	)
 	ctx, _ = flowSpan.Observation(ctx)
 
 	prompter, err := newUserPrompter(ctx, fwc.db, fwc.userID)
@@ -277,7 +279,10 @@ func buildFlowWorker(
 		Screenshot: workers.sw,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	ctx, _ = obs.Observer.NewObservation(ctx, langfuse.WithObservationTraceID(observation.TraceID()))
+	ctx, _ = obs.Observer.NewObservation(ctx,
+		langfuse.WithObservationTraceID(observation.TraceID()),
+		traceCtxOpt,
+	)
 	fw := &flowWorker{
 		tc:      NewTaskController(flowCtx),
 		wg:      &sync.WaitGroup{},
@@ -367,24 +372,25 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		return nil, fmt.Errorf("failed to get user %d: %w", flow.UserID, err)
 	}
 
+	traceCtxOpt := langfuse.WithObservationTraceContext(
+		langfuse.WithTraceName(fmt.Sprintf("%s%d flow worker", fwc.cfg.TenantLabel(), flow.ID)),
+		langfuse.WithTraceUserID(tenantUserID(fwc.cfg, user.Mail)),
+		langfuse.WithTraceTags(tenantTags(fwc.cfg, "controller", "flow")),
+		langfuse.WithTraceSessionID(fwc.cfg.ScopedName(fmt.Sprintf("flow-%d", flow.ID))),
+		langfuse.WithTraceMetadata(tenantMeta(fwc.cfg, langfuse.Metadata{
+			"flow_id":       flow.ID,
+			"user_id":       flow.UserID,
+			"user_email":    user.Mail,
+			"user_name":     user.Name,
+			"user_hash":     user.Hash,
+			"user_role":     user.RoleName,
+			"provider_name": flow.ModelProviderName,
+			"provider_type": flow.ModelProviderType,
+		})),
+	)
 	ctx, observation := obs.Observer.NewObservation(ctx,
 		langfuse.WithObservationTraceID(flow.TraceID.String),
-		langfuse.WithObservationTraceContext(
-			langfuse.WithTraceName(fmt.Sprintf("%s%d flow worker", fwc.cfg.TenantLabel(), flow.ID)),
-			langfuse.WithTraceUserID(tenantUserID(fwc.cfg, user.Mail)),
-			langfuse.WithTraceTags(tenantTags(fwc.cfg, "controller", "flow")),
-			langfuse.WithTraceSessionID(fwc.cfg.ScopedName(fmt.Sprintf("flow-%d", flow.ID))),
-			langfuse.WithTraceMetadata(tenantMeta(fwc.cfg, langfuse.Metadata{
-				"flow_id":       flow.ID,
-				"user_id":       flow.UserID,
-				"user_email":    user.Mail,
-				"user_name":     user.Name,
-				"user_hash":     user.Hash,
-				"user_role":     user.RoleName,
-				"provider_name": flow.ModelProviderName,
-				"provider_type": flow.ModelProviderType,
-			})),
-		),
+		traceCtxOpt,
 	)
 	flowSpan := observation.Span(langfuse.WithSpanName("prepare flow worker"))
 	ctx, _ = flowSpan.Observation(ctx)
@@ -445,7 +451,10 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		Screenshot: workers.sw,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	ctx, _ = obs.Observer.NewObservation(ctx, langfuse.WithObservationTraceID(observation.TraceID()))
+	ctx, _ = obs.Observer.NewObservation(ctx,
+		langfuse.WithObservationTraceID(observation.TraceID()),
+		traceCtxOpt,
+	)
 	fw := &flowWorker{
 		tc:      NewTaskController(flowCtx),
 		wg:      &sync.WaitGroup{},

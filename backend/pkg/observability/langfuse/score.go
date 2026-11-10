@@ -113,23 +113,18 @@ func newScore(observer enqueue, opts ...ScoreOption) {
 		opt(s)
 	}
 
-	obsCreate := &api.IngestionEvent{IngestionEventOne: &api.IngestionEventOne{
-		ID:        newSpanID(),
-		Timestamp: getTimeRefString(s.StartTime),
-		Type:      api.IngestionEventOneType(ingestionCreateScore).Ptr(),
-		Body: &api.ScoreBody{
-			ID:            getStringRef(s.ObservationID),
-			ObservationID: getStringRef(s.ParentObservationID),
-			TraceID:       getStringRef(s.TraceID),
-			Name:          s.Name,
-			Metadata:      s.Metadata,
-			Value:         s.Value,
-			DataType:      s.DataType,
-			Comment:       s.Comment,
-			ConfigID:      s.ConfigID,
-			QueueID:       s.QueueID,
-		},
-	}}
+	scoreReq := &api.CreateScoreRequest{
+		ID:            getStringRef(s.ObservationID),
+		ObservationID: getStringRef(s.ParentObservationID),
+		TraceID:       getStringRef(s.TraceID),
+		Name:          s.Name,
+		Metadata:      s.Metadata,
+		Value:         s.Value,
+		DataType:      s.DataType,
+		Comment:       s.Comment,
+		ConfigID:      s.ConfigID,
+		QueueID:       s.QueueID,
+	}
 
-	s.observer.enqueue(obsCreate)
+	s.observer.enqueueScore(scoreReq)
 }

@@ -4,9 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
-
-	"pentagi/pkg/observability/langfuse/api"
 
 	"github.com/vxcontrol/langchaingo/llms"
 )
@@ -45,7 +44,9 @@ type generation struct {
 	ObservationID       string `json:"observation_id"`
 	ParentObservationID string `json:"parent_observation_id"`
 
-	observer enqueue `json:"-"`
+	traceCtx *TraceContext `json:"-"`
+	endOnce  sync.Once     `json:"-"`
+	observer enqueue       `json:"-"`
 }
 
 type GenerationOption func(*generation)
@@ -59,6 +60,12 @@ func withGenerationTraceID(traceID string) GenerationOption {
 func withGenerationParentObservationID(parentObservationID string) GenerationOption {
 	return func(g *generation) {
 		g.ParentObservationID = parentObservationID
+	}
+}
+
+func withGenerationTraceContext(traceCtx *TraceContext) GenerationOption {
+	return func(g *generation) {
+		g.traceCtx = cloneTraceContext(traceCtx)
 	}
 }
 
@@ -185,73 +192,47 @@ func newGeneration(observer enqueue, opts ...GenerationOption) Generation {
 		g.CompletionStartTime = g.StartTime
 	}
 
-	genCreate := &api.IngestionEvent{IngestionEventFour: &api.IngestionEventFour{
-		ID:        newSpanID(),
-		Timestamp: getTimeRefString(g.StartTime),
-		Type:      api.IngestionEventFourType(ingestionCreateGeneration).Ptr(),
-		Body: &api.CreateGenerationBody{
-			ID:                  getStringRef(g.ObservationID),
-			TraceID:             getStringRef(g.TraceID),
-			ParentObservationID: getStringRef(g.ParentObservationID),
-			Name:                getStringRef(g.Name),
-			Metadata:            g.Metadata,
-			Input:               convertInput(g.Input, g.Tools),
-			Output:              convertOutput(g.Output),
-			StartTime:           g.StartTime,
-			EndTime:             g.EndTime,
-			CompletionStartTime: g.CompletionStartTime,
-			Level:               g.Level.ToLangfuse(),
-			StatusMessage:       g.Status,
-			Version:             g.Version,
-			Model:               g.Model,
-			ModelParameters:     g.ModelParameters.ToLangfuse(),
-			PromptName:          g.PromptName,
-			PromptVersion:       g.PromptVersion,
-			Usage:               g.Usage.ToLangfuse(),
-		},
-	}}
-
-	g.observer.enqueue(genCreate)
-
 	return g
 }
 
 func (g *generation) End(opts ...GenerationOption) {
-	id := g.ObservationID
-	startTime := g.StartTime
-	g.EndTime = getCurrentTimeRef()
-	for _, opt := range opts {
-		opt(g)
-	}
+	g.endOnce.Do(func() {
+		id := g.ObservationID
+		startTime := g.StartTime
+		g.EndTime = getCurrentTimeRef()
+		for _, opt := range opts {
+			opt(g)
+		}
 
-	// preserve the original observation ID and start time
-	g.ObservationID = id
-	g.StartTime = startTime
+		// preserve the original observation ID and start time
+		g.ObservationID = id
+		g.StartTime = startTime
 
-	genUpdate := &api.IngestionEvent{IngestionEventFive: &api.IngestionEventFive{
-		ID:        newSpanID(),
-		Timestamp: getTimeRefString(g.EndTime),
-		Type:      api.IngestionEventFiveType(ingestionUpdateGeneration).Ptr(),
-		Body: &api.UpdateGenerationBody{
-			ID:                  g.ObservationID,
-			Name:                getStringRef(g.Name),
-			Metadata:            g.Metadata,
-			Input:               convertInput(g.Input, g.Tools),
-			Output:              convertOutput(g.Output),
+		otelSpan := buildOtelSpan(otelSpanParams{
+			TraceID:             g.TraceID,
+			ObservationID:       g.ObservationID,
+			ParentObservationID: g.ParentObservationID,
+			Name:                g.Name,
+			ObservationType:     otelObservationTypeGeneration,
+			StartTime:           g.StartTime,
 			EndTime:             g.EndTime,
 			CompletionStartTime: g.CompletionStartTime,
-			Level:               g.Level.ToLangfuse(),
-			StatusMessage:       g.Status,
+			Level:               g.Level,
+			Status:              g.Status,
 			Version:             g.Version,
+			Input:               convertInput(g.Input, g.Tools),
+			Output:              convertOutput(g.Output),
+			Metadata:            g.Metadata,
 			Model:               g.Model,
-			ModelParameters:     g.ModelParameters.ToLangfuse(),
+			ModelParameters:     g.ModelParameters,
+			Usage:               g.Usage,
 			PromptName:          g.PromptName,
 			PromptVersion:       g.PromptVersion,
-			Usage:               g.Usage.ToLangfuse(),
-		},
-	}}
+			TraceCtx:            g.traceCtx,
+		})
 
-	g.observer.enqueue(genUpdate)
+		g.observer.enqueue(otelSpan)
+	})
 }
 
 func (g *generation) String() string {
@@ -263,10 +244,15 @@ func (g *generation) MarshalJSON() ([]byte, error) {
 }
 
 func (g *generation) Observation(ctx context.Context) (context.Context, Observation) {
+	traceCtx := g.traceCtx
+	if parent, ok := getObservationContext(ctx); ok && parent.TraceCtx != nil {
+		traceCtx = mergeTraceContext(parent.TraceCtx, traceCtx)
+	}
 	obs := &observation{
 		obsCtx: observationContext{
 			TraceID:       g.TraceID,
 			ObservationID: g.ObservationID,
+			TraceCtx:      cloneTraceContext(traceCtx),
 		},
 		observer: g.observer,
 	}

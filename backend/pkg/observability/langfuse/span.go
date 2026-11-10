@@ -4,9 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
-
-	"pentagi/pkg/observability/langfuse/api"
 )
 
 const (
@@ -36,7 +35,9 @@ type span struct {
 	ObservationID       string `json:"observation_id"`
 	ParentObservationID string `json:"parent_observation_id"`
 
-	observer enqueue `json:"-"`
+	traceCtx *TraceContext `json:"-"`
+	endOnce  sync.Once     `json:"-"`
+	observer enqueue       `json:"-"`
 }
 
 type SpanOption func(*span)
@@ -50,6 +51,12 @@ func withSpanTraceID(traceID string) SpanOption {
 func withSpanParentObservationID(parentObservationID string) SpanOption {
 	return func(s *span) {
 		s.ParentObservationID = parentObservationID
+	}
+}
+
+func withSpanTraceContext(traceCtx *TraceContext) SpanOption {
+	return func(s *span) {
+		s.traceCtx = cloneTraceContext(traceCtx)
 	}
 }
 
@@ -128,61 +135,41 @@ func newSpan(observer enqueue, opts ...SpanOption) Span {
 		opt(s)
 	}
 
-	obsCreate := &api.IngestionEvent{IngestionEventTwo: &api.IngestionEventTwo{
-		ID:        newSpanID(),
-		Timestamp: getTimeRefString(s.StartTime),
-		Type:      api.IngestionEventTwoType(ingestionCreateSpan).Ptr(),
-		Body: &api.CreateSpanBody{
-			ID:                  getStringRef(s.ObservationID),
-			TraceID:             getStringRef(s.TraceID),
-			ParentObservationID: getStringRef(s.ParentObservationID),
-			Name:                getStringRef(s.Name),
-			Input:               convertInput(s.Input, nil),
-			Output:              convertOutput(s.Output),
-			StartTime:           s.StartTime,
-			EndTime:             s.EndTime,
-			Metadata:            s.Metadata,
-			Level:               s.Level.ToLangfuse(),
-			StatusMessage:       s.Status,
-			Version:             s.Version,
-		},
-	}}
-
-	s.observer.enqueue(obsCreate)
-
 	return s
 }
 
 func (s *span) End(opts ...SpanOption) {
-	id := s.ObservationID
-	startTime := s.StartTime
-	s.EndTime = getCurrentTimeRef()
-	for _, opt := range opts {
-		opt(s)
-	}
+	s.endOnce.Do(func() {
+		id := s.ObservationID
+		startTime := s.StartTime
+		s.EndTime = getCurrentTimeRef()
+		for _, opt := range opts {
+			opt(s)
+		}
 
-	// preserve the original observation ID and start time
-	s.ObservationID = id
-	s.StartTime = startTime
+		// preserve the original observation ID and start time
+		s.ObservationID = id
+		s.StartTime = startTime
 
-	obsUpdate := &api.IngestionEvent{IngestionEventThree: &api.IngestionEventThree{
-		ID:        newSpanID(),
-		Timestamp: getTimeRefString(s.EndTime),
-		Type:      api.IngestionEventThreeType(ingestionUpdateSpan).Ptr(),
-		Body: &api.UpdateSpanBody{
-			ID:            s.ObservationID,
-			Name:          getStringRef(s.Name),
-			Metadata:      s.Metadata,
-			Input:         convertInput(s.Input, nil),
-			Output:        convertOutput(s.Output),
-			EndTime:       s.EndTime,
-			Level:         s.Level.ToLangfuse(),
-			StatusMessage: s.Status,
-			Version:       s.Version,
-		},
-	}}
+		otelSpan := buildOtelSpan(otelSpanParams{
+			TraceID:             s.TraceID,
+			ObservationID:       s.ObservationID,
+			ParentObservationID: s.ParentObservationID,
+			Name:                s.Name,
+			ObservationType:     otelObservationTypeSpan,
+			StartTime:           s.StartTime,
+			EndTime:             s.EndTime,
+			Level:               s.Level,
+			Status:              s.Status,
+			Version:             s.Version,
+			Input:               convertInput(s.Input, nil),
+			Output:              convertOutput(s.Output),
+			Metadata:            s.Metadata,
+			TraceCtx:            s.traceCtx,
+		})
 
-	s.observer.enqueue(obsUpdate)
+		s.observer.enqueue(otelSpan)
+	})
 }
 
 func (s *span) String() string {
@@ -194,10 +181,15 @@ func (s *span) MarshalJSON() ([]byte, error) {
 }
 
 func (s *span) Observation(ctx context.Context) (context.Context, Observation) {
+	traceCtx := s.traceCtx
+	if parent, ok := getObservationContext(ctx); ok && parent.TraceCtx != nil {
+		traceCtx = mergeTraceContext(parent.TraceCtx, traceCtx)
+	}
 	obs := &observation{
 		obsCtx: observationContext{
 			TraceID:       s.TraceID,
 			ObservationID: s.ObservationID,
+			TraceCtx:      cloneTraceContext(traceCtx),
 		},
 		observer: s.observer,
 	}

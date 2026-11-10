@@ -20,7 +20,9 @@ func TestNoop_NoopObserver_LifecycleCallsDoNothing(t *testing.T) {
 	assert.NoError(t, obs.ForceFlush(context.Background()))
 	assert.NotPanics(t, func() {
 		obs.enqueue(nil)
-		obs.enqueue(&api.IngestionEvent{})
+		obs.enqueue(&api.OtelSpan{})
+		obs.enqueueScore(nil)
+		obs.enqueueScore(&api.CreateScoreRequest{})
 	})
 }
 

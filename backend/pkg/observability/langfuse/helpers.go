@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"slices"
+	"strconv"
 	"time"
 
 	"pentagi/pkg/observability/langfuse/api"
@@ -16,6 +18,41 @@ import (
 const (
 	firstVersion   = "v1"
 	timeFormat8601 = "2006-01-02T15:04:05.000000Z"
+
+	otelObservationTypeSpan       = "span"
+	otelObservationTypeGeneration = "generation"
+	otelObservationTypeEvent      = "event"
+	otelObservationTypeEmbedding  = "embedding"
+	otelObservationTypeAgent      = "agent"
+	otelObservationTypeTool       = "tool"
+	otelObservationTypeChain      = "chain"
+	otelObservationTypeRetriever  = "retriever"
+	otelObservationTypeGuardrail  = "guardrail"
+	otelObservationTypeEvaluator  = "evaluator"
+
+	otelAttrObservationType            = "langfuse.observation.type"
+	otelAttrObservationLevel           = "langfuse.observation.level"
+	otelAttrObservationStatusMessage   = "langfuse.observation.status_message"
+	otelAttrObservationInput           = "langfuse.observation.input"
+	otelAttrObservationOutput          = "langfuse.observation.output"
+	otelAttrObservationMetadataPrefix  = "langfuse.observation.metadata."
+	otelAttrObservationModelName       = "langfuse.observation.model.name"
+	otelAttrObservationModelParameters = "langfuse.observation.model.parameters"
+	otelAttrObservationUsageDetails    = "langfuse.observation.usage_details"
+	otelAttrObservationCostDetails     = "langfuse.observation.cost_details"
+	otelAttrObservationPromptName      = "langfuse.observation.prompt.name"
+	otelAttrObservationPromptVersion   = "langfuse.observation.prompt.version"
+	otelAttrObservationCompletionStart = "langfuse.observation.completion_start_time"
+
+	otelAttrTraceName           = "langfuse.trace.name"
+	otelAttrTracePublic         = "langfuse.trace.public"
+	otelAttrTraceTags           = "langfuse.trace.tags"
+	otelAttrTraceMetadataPrefix = "langfuse.trace.metadata."
+	otelAttrUserID              = "langfuse.user.id"
+	otelAttrSessionID           = "langfuse.session.id"
+	otelAttrRelease             = "langfuse.release"
+	otelAttrVersion             = "langfuse.version"
+	otelAttrEnvironment         = "langfuse.environment"
 )
 
 var (
@@ -334,4 +371,247 @@ func getIntRef(i int) *int {
 
 func getBoolRef(b bool) *bool {
 	return &b
+}
+
+type otelSpanParams struct {
+	TraceID             string
+	ObservationID       string
+	ParentObservationID string
+	Name                string
+	ObservationType     string
+	StartTime           *time.Time
+	EndTime             *time.Time
+	CompletionStartTime *time.Time
+	Level               ObservationLevel
+	Status              *string
+	Version             *string
+	Input               any
+	Output              any
+	Metadata            Metadata
+	Model               *string
+	ModelParameters     *ModelParameters
+	Usage               *GenerationUsage
+	PromptName          *string
+	PromptVersion       *int
+	TraceCtx            *TraceContext
+}
+
+func otelStringAttr(key, val string) *api.OtelAttribute {
+	k := key
+	v := val
+	return &api.OtelAttribute{
+		Key:   &k,
+		Value: &api.OtelAttributeValue{StringValue: &v},
+	}
+}
+
+func otelIntAttr(key string, val int) *api.OtelAttribute {
+	k := key
+	v := val
+	return &api.OtelAttribute{
+		Key:   &k,
+		Value: &api.OtelAttributeValue{IntValue: &v},
+	}
+}
+
+func otelFloatAttr(key string, val float64) *api.OtelAttribute {
+	k := key
+	v := val
+	return &api.OtelAttribute{
+		Key:   &k,
+		Value: &api.OtelAttributeValue{DoubleValue: &v},
+	}
+}
+
+func otelBoolAttr(key string, val bool) *api.OtelAttribute {
+	k := key
+	v := val
+	return &api.OtelAttribute{
+		Key:   &k,
+		Value: &api.OtelAttributeValue{BoolValue: &v},
+	}
+}
+
+func otelJSONOrStringAttr(key string, val any) *api.OtelAttribute {
+	if val == nil {
+		return nil
+	}
+	if s, ok := val.(string); ok {
+		return otelStringAttr(key, s)
+	}
+	data, err := json.Marshal(val)
+	if err != nil {
+		return otelStringAttr(key, fmt.Sprintf("%v", val))
+	}
+	return otelStringAttr(key, string(data))
+}
+
+func otelAnyAttr(key string, val any) *api.OtelAttribute {
+	if val == nil {
+		return nil
+	}
+	switch v := val.(type) {
+	case string:
+		return otelStringAttr(key, v)
+	case bool:
+		return otelBoolAttr(key, v)
+	case int:
+		return otelIntAttr(key, v)
+	case int64:
+		return otelIntAttr(key, int(v))
+	case int32:
+		return otelIntAttr(key, int(v))
+	case float64:
+		return otelFloatAttr(key, v)
+	case float32:
+		return otelFloatAttr(key, float64(v))
+	default:
+		return otelJSONOrStringAttr(key, v)
+	}
+}
+
+func buildOtelSpan(p otelSpanParams) *api.OtelSpan {
+	startTime := getCurrentTime()
+	if p.StartTime != nil {
+		startTime = p.StartTime.UTC()
+	}
+	endTime := startTime
+	if p.EndTime != nil {
+		endTime = p.EndTime.UTC()
+	}
+
+	var attrs []*api.OtelAttribute
+	appendAttr := func(attr *api.OtelAttribute) {
+		if attr != nil {
+			attrs = append(attrs, attr)
+		}
+	}
+
+	obsType := p.ObservationType
+	if obsType == "" {
+		obsType = otelObservationTypeSpan
+	}
+	appendAttr(otelStringAttr(otelAttrObservationType, obsType))
+
+	levelStr := string(*p.Level.ToLangfuse())
+	appendAttr(otelStringAttr(otelAttrObservationLevel, levelStr))
+
+	if p.Status != nil {
+		appendAttr(otelStringAttr(otelAttrObservationStatusMessage, *p.Status))
+	}
+
+	inputVal := p.Input
+	if inputVal == nil && p.ParentObservationID == "" && p.TraceCtx != nil && p.TraceCtx.Input != nil {
+		inputVal = p.TraceCtx.Input
+	}
+	appendAttr(otelJSONOrStringAttr(otelAttrObservationInput, inputVal))
+
+	outputVal := p.Output
+	if outputVal == nil && p.ParentObservationID == "" && p.TraceCtx != nil && p.TraceCtx.Output != nil {
+		outputVal = p.TraceCtx.Output
+	}
+	appendAttr(otelJSONOrStringAttr(otelAttrObservationOutput, outputVal))
+
+	if len(p.Metadata) > 0 {
+		for _, k := range slices.Sorted(maps.Keys(p.Metadata)) {
+			appendAttr(otelAnyAttr(otelAttrObservationMetadataPrefix+k, p.Metadata[k]))
+		}
+	}
+
+	if p.Model != nil && *p.Model != "" {
+		appendAttr(otelStringAttr(otelAttrObservationModelName, *p.Model))
+	}
+
+	if params := p.ModelParameters.ToLangfuse(); params != nil {
+		appendAttr(otelJSONOrStringAttr(otelAttrObservationModelParameters, params))
+	}
+
+	if usage := p.Usage.ToLangfuse(); usage != nil && usage.Usage != nil {
+		u := usage.Usage
+		usageDetails := map[string]int{
+			"input":  u.Input,
+			"output": u.Output,
+			"total":  u.Total,
+		}
+		appendAttr(otelJSONOrStringAttr(otelAttrObservationUsageDetails, usageDetails))
+
+		if u.InputCost != nil || u.OutputCost != nil || u.TotalCost != nil {
+			costDetails := make(map[string]float64)
+			if u.InputCost != nil {
+				costDetails["input"] = *u.InputCost
+			}
+			if u.OutputCost != nil {
+				costDetails["output"] = *u.OutputCost
+			}
+			if u.TotalCost != nil {
+				costDetails["total"] = *u.TotalCost
+			}
+			appendAttr(otelJSONOrStringAttr(otelAttrObservationCostDetails, costDetails))
+		}
+	}
+
+	if p.PromptName != nil && *p.PromptName != "" {
+		appendAttr(otelStringAttr(otelAttrObservationPromptName, *p.PromptName))
+	}
+	if p.PromptVersion != nil {
+		appendAttr(otelIntAttr(otelAttrObservationPromptVersion, *p.PromptVersion))
+	}
+	if p.CompletionStartTime != nil {
+		appendAttr(otelStringAttr(otelAttrObservationCompletionStart, getTimeRefString(p.CompletionStartTime)))
+	}
+
+	version := p.Version
+	if (version == nil || *version == "") && p.TraceCtx != nil && p.TraceCtx.Version != nil {
+		version = p.TraceCtx.Version
+	}
+	if version != nil && *version != "" {
+		appendAttr(otelStringAttr(otelAttrVersion, *version))
+	}
+
+	if p.TraceCtx != nil {
+		if p.TraceCtx.Name != nil && *p.TraceCtx.Name != "" {
+			appendAttr(otelStringAttr(otelAttrTraceName, *p.TraceCtx.Name))
+		}
+		if p.TraceCtx.UserID != nil && *p.TraceCtx.UserID != "" {
+			appendAttr(otelStringAttr(otelAttrUserID, *p.TraceCtx.UserID))
+		}
+		if p.TraceCtx.SessionID != nil && *p.TraceCtx.SessionID != "" {
+			appendAttr(otelStringAttr(otelAttrSessionID, *p.TraceCtx.SessionID))
+		}
+		if p.TraceCtx.Public != nil {
+			appendAttr(otelBoolAttr(otelAttrTracePublic, *p.TraceCtx.Public))
+		}
+		if len(p.TraceCtx.Tags) > 0 {
+			appendAttr(otelJSONOrStringAttr(otelAttrTraceTags, p.TraceCtx.Tags))
+		}
+		if len(p.TraceCtx.Metadata) > 0 {
+			for _, k := range slices.Sorted(maps.Keys(p.TraceCtx.Metadata)) {
+				appendAttr(otelAnyAttr(otelAttrTraceMetadataPrefix+k, p.TraceCtx.Metadata[k]))
+			}
+		}
+	}
+
+	span := &api.OtelSpan{
+		TraceID:           p.TraceID,
+		SpanID:            p.ObservationID,
+		Name:              getStringRef(p.Name),
+		Kind:              getIntRef(1),
+		StartTimeUnixNano: strconv.FormatInt(startTime.UnixNano(), 10),
+		EndTimeUnixNano:   strconv.FormatInt(endTime.UnixNano(), 10),
+		Attributes:        attrs,
+	}
+	if p.ParentObservationID != "" {
+		span.ParentSpanID = p.ParentObservationID
+	}
+	if p.Level == ObservationLevelError {
+		status := map[string]any{"code": 2}
+		if p.Status != nil {
+			status["message"] = *p.Status
+		}
+		span.Status = status
+	} else if p.Status != nil {
+		span.Status = map[string]any{"code": 1, "message": *p.Status}
+	}
+
+	return span
 }

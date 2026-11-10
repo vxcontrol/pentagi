@@ -114,6 +114,8 @@ type executorLangfuseEvent struct {
 		Metadata            map[string]any `json:"metadata"`
 		Level               string         `json:"level"`
 		StatusMessage       string         `json:"statusMessage"`
+		StartTimeUnixNano   string         `json:"startTimeUnixNano"`
+		EndTimeUnixNano     string         `json:"endTimeUnixNano"`
 	} `json:"body"`
 }
 
@@ -121,16 +123,80 @@ func (l *executorLangfuse) RoundTrip(r *http.Request) (*http.Response, error) {
 	answer := `{"data":[{"id":"project","name":"executor"}]}`
 	if r.Method == http.MethodPost {
 		defer r.Body.Close()
-		var ingestion struct {
-			Batch []executorLangfuseEvent `json:"batch"`
+		var otlp struct {
+			ResourceSpans []struct {
+				ScopeSpans []struct {
+					Spans []struct {
+						TraceID           string `json:"traceId"`
+						SpanID            string `json:"spanId"`
+						ParentSpanID      string `json:"parentSpanId"`
+						Name              string `json:"name"`
+						StartTimeUnixNano string `json:"startTimeUnixNano"`
+						EndTimeUnixNano   string `json:"endTimeUnixNano"`
+						Attributes        []struct {
+							Key   string `json:"key"`
+							Value struct {
+								StringValue *string  `json:"stringValue"`
+								IntValue    *float64 `json:"intValue"`
+								DoubleValue *float64 `json:"doubleValue"`
+								BoolValue   *bool    `json:"boolValue"`
+							} `json:"value"`
+						} `json:"attributes"`
+					} `json:"spans"`
+				} `json:"scopeSpans"`
+			} `json:"resourceSpans"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&ingestion); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&otlp); err != nil {
 			return nil, err
 		}
 		l.mu.Lock()
-		l.events = append(l.events, ingestion.Batch...)
+		for _, rs := range otlp.ResourceSpans {
+			for _, ss := range rs.ScopeSpans {
+				for _, s := range ss.Spans {
+					ev := executorLangfuseEvent{}
+					ev.Body.ID = s.SpanID
+					ev.Body.TraceID = s.TraceID
+					ev.Body.ParentObservationID = s.ParentSpanID
+					ev.Body.Name = s.Name
+					ev.Body.StartTimeUnixNano = s.StartTimeUnixNano
+					ev.Body.EndTimeUnixNano = s.EndTimeUnixNano
+					ev.Body.Metadata = make(map[string]any)
+					for _, attr := range s.Attributes {
+						var val any
+						switch {
+						case attr.Value.StringValue != nil:
+							val = *attr.Value.StringValue
+						case attr.Value.IntValue != nil:
+							val = *attr.Value.IntValue
+						case attr.Value.DoubleValue != nil:
+							val = *attr.Value.DoubleValue
+						case attr.Value.BoolValue != nil:
+							val = *attr.Value.BoolValue
+						}
+						switch {
+						case attr.Key == "langfuse.observation.type":
+							if str, ok := val.(string); ok {
+								ev.Type = str + "-create"
+							}
+						case attr.Key == "langfuse.observation.level":
+							if str, ok := val.(string); ok {
+								ev.Body.Level = str
+							}
+						case attr.Key == "langfuse.observation.status_message":
+							if str, ok := val.(string); ok {
+								ev.Body.StatusMessage = str
+							}
+						case strings.HasPrefix(attr.Key, "langfuse.observation.metadata."):
+							metaKey := strings.TrimPrefix(attr.Key, "langfuse.observation.metadata.")
+							ev.Body.Metadata[metaKey] = val
+						}
+					}
+					l.events = append(l.events, ev)
+				}
+			}
+		}
 		l.mu.Unlock()
-		answer = `{"successes":[],"errors":[]}`
+		answer = `{}`
 	}
 
 	return &http.Response{
@@ -915,21 +981,25 @@ func TestExecutor_Execute_ObservesEachToolTypeUnderTheCallersTrace(t *testing.T)
 					}
 				}
 
-				// One goroutine sends events in the order Execute made them, so an observation's second event is its close.
+				// In Langfuse v4, each observation is exported once when completed with both start and end timestamps.
 				var lifecycle []executorLangfuseEvent
 				for _, event := range sent {
 					if event.Body.ID == id {
 						lifecycle = append(lifecycle, event)
 					}
 				}
-				if len(lifecycle) != 2 {
-					t.Errorf("call %d: observation %q was sent %d times, want once opened and once closed",
+				if len(lifecycle) != 1 {
+					t.Errorf("call %d: observation %q was sent %d times, want once on completion",
 						i+1, id, len(lifecycle))
 					continue
 				}
-				if closing := lifecycle[1].Body; closing.Level != want.level || closing.StatusMessage != want.status {
+				if closing := lifecycle[0].Body; closing.Level != want.level || closing.StatusMessage != want.status {
 					t.Errorf("call %d: the observation was closed at level %q with %q, want %q with %q",
 						i+1, closing.Level, closing.StatusMessage, want.level, want.status)
+				}
+				if closing := lifecycle[0].Body; closing.StartTimeUnixNano == "" || closing.EndTimeUnixNano == "" {
+					t.Errorf("call %d: the observation must include both start and end timestamps, got start=%q end=%q",
+						i+1, closing.StartTimeUnixNano, closing.EndTimeUnixNano)
 				}
 			}
 		})
