@@ -4,9 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
-
-	"pentagi/pkg/observability/langfuse/api"
 
 	"github.com/vxcontrol/langchaingo/llms"
 )
@@ -41,7 +40,9 @@ type agent struct {
 	ObservationID       string `json:"observation_id"`
 	ParentObservationID string `json:"parent_observation_id"`
 
-	observer enqueue `json:"-"`
+	traceCtx *TraceContext `json:"-"`
+	endOnce  sync.Once     `json:"-"`
+	observer enqueue       `json:"-"`
 }
 
 type AgentOption func(*agent)
@@ -55,6 +56,12 @@ func withAgentTraceID(traceID string) AgentOption {
 func withAgentParentObservationID(parentObservationID string) AgentOption {
 	return func(a *agent) {
 		a.ParentObservationID = parentObservationID
+	}
+}
+
+func withAgentTraceContext(traceCtx *TraceContext) AgentOption {
+	return func(a *agent) {
+		a.traceCtx = cloneTraceContext(traceCtx)
 	}
 }
 
@@ -151,65 +158,43 @@ func newAgent(observer enqueue, opts ...AgentOption) Agent {
 		opt(a)
 	}
 
-	obsCreate := &api.IngestionEvent{IngestionEventTen: &api.IngestionEventTen{
-		ID:        newSpanID(),
-		Timestamp: getTimeRefString(a.StartTime),
-		Type:      api.IngestionEventTenType(ingestionCreateAgent).Ptr(),
-		Body: &api.CreateGenerationBody{
-			ID:                  getStringRef(a.ObservationID),
-			TraceID:             getStringRef(a.TraceID),
-			ParentObservationID: getStringRef(a.ParentObservationID),
-			Name:                getStringRef(a.Name),
-			Metadata:            a.Metadata,
-			Input:               convertInput(a.Input, a.Tools),
-			Output:              convertOutput(a.Output),
-			StartTime:           a.StartTime,
-			EndTime:             a.EndTime,
-			Level:               a.Level.ToLangfuse(),
-			StatusMessage:       a.Status,
-			Version:             a.Version,
-			Model:               a.Model,
-			ModelParameters:     a.ModelParameters.ToLangfuse(),
-		},
-	}}
-
-	a.observer.enqueue(obsCreate)
-
 	return a
 }
 
 func (a *agent) End(opts ...AgentOption) {
-	id := a.ObservationID
-	startTime := a.StartTime
-	a.EndTime = getCurrentTimeRef()
-	for _, opt := range opts {
-		opt(a)
-	}
+	a.endOnce.Do(func() {
+		id := a.ObservationID
+		startTime := a.StartTime
+		a.EndTime = getCurrentTimeRef()
+		for _, opt := range opts {
+			opt(a)
+		}
 
-	// preserve the original observation ID and start time
-	a.ObservationID = id
-	a.StartTime = startTime
+		// preserve the original observation ID and start time
+		a.ObservationID = id
+		a.StartTime = startTime
 
-	agentUpdate := &api.IngestionEvent{IngestionEventTen: &api.IngestionEventTen{
-		ID:        newSpanID(),
-		Timestamp: getTimeRefString(a.EndTime),
-		Type:      api.IngestionEventTenType(ingestionCreateAgent).Ptr(),
-		Body: &api.CreateGenerationBody{
-			ID:              getStringRef(a.ObservationID),
-			Name:            getStringRef(a.Name),
-			Metadata:        a.Metadata,
-			Input:           convertInput(a.Input, a.Tools),
-			Output:          convertOutput(a.Output),
-			EndTime:         a.EndTime,
-			Level:           a.Level.ToLangfuse(),
-			StatusMessage:   a.Status,
-			Version:         a.Version,
-			Model:           a.Model,
-			ModelParameters: a.ModelParameters.ToLangfuse(),
-		},
-	}}
+		otelSpan := buildOtelSpan(otelSpanParams{
+			TraceID:             a.TraceID,
+			ObservationID:       a.ObservationID,
+			ParentObservationID: a.ParentObservationID,
+			Name:                a.Name,
+			ObservationType:     otelObservationTypeAgent,
+			StartTime:           a.StartTime,
+			EndTime:             a.EndTime,
+			Level:               a.Level,
+			Status:              a.Status,
+			Version:             a.Version,
+			Input:               convertInput(a.Input, a.Tools),
+			Output:              convertOutput(a.Output),
+			Metadata:            a.Metadata,
+			Model:               a.Model,
+			ModelParameters:     a.ModelParameters,
+			TraceCtx:            a.traceCtx,
+		})
 
-	a.observer.enqueue(agentUpdate)
+		a.observer.enqueue(otelSpan)
+	})
 }
 
 func (a *agent) String() string {
@@ -221,10 +206,15 @@ func (a *agent) MarshalJSON() ([]byte, error) {
 }
 
 func (a *agent) Observation(ctx context.Context) (context.Context, Observation) {
+	traceCtx := a.traceCtx
+	if parent, ok := getObservationContext(ctx); ok && parent.TraceCtx != nil {
+		traceCtx = mergeTraceContext(parent.TraceCtx, traceCtx)
+	}
 	obs := &observation{
 		obsCtx: observationContext{
 			TraceID:       a.TraceID,
 			ObservationID: a.ObservationID,
+			TraceCtx:      cloneTraceContext(traceCtx),
 		},
 		observer: a.observer,
 	}

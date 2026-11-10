@@ -4,9 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
-
-	"pentagi/pkg/observability/langfuse/api"
 
 	"github.com/vxcontrol/langchaingo/llms"
 )
@@ -41,7 +40,9 @@ type guardrail struct {
 	ObservationID       string `json:"observation_id"`
 	ParentObservationID string `json:"parent_observation_id"`
 
-	observer enqueue `json:"-"`
+	traceCtx *TraceContext `json:"-"`
+	endOnce  sync.Once     `json:"-"`
+	observer enqueue       `json:"-"`
 }
 
 type GuardrailOption func(*guardrail)
@@ -55,6 +56,12 @@ func withGuardrailTraceID(traceID string) GuardrailOption {
 func withGuardrailParentObservationID(parentObservationID string) GuardrailOption {
 	return func(g *guardrail) {
 		g.ParentObservationID = parentObservationID
+	}
+}
+
+func withGuardrailTraceContext(traceCtx *TraceContext) GuardrailOption {
+	return func(g *guardrail) {
+		g.traceCtx = cloneTraceContext(traceCtx)
 	}
 }
 
@@ -151,65 +158,43 @@ func newGuardrail(observer enqueue, opts ...GuardrailOption) Guardrail {
 		opt(g)
 	}
 
-	obsCreate := &api.IngestionEvent{IngestionEventSixteen: &api.IngestionEventSixteen{
-		ID:        newSpanID(),
-		Timestamp: getTimeRefString(g.StartTime),
-		Type:      api.IngestionEventSixteenType(ingestionCreateGuardrail).Ptr(),
-		Body: &api.CreateGenerationBody{
-			ID:                  getStringRef(g.ObservationID),
-			TraceID:             getStringRef(g.TraceID),
-			ParentObservationID: getStringRef(g.ParentObservationID),
-			Name:                getStringRef(g.Name),
-			Metadata:            g.Metadata,
-			Input:               convertInput(g.Input, g.Tools),
-			Output:              convertOutput(g.Output),
-			StartTime:           g.StartTime,
-			EndTime:             g.EndTime,
-			Level:               g.Level.ToLangfuse(),
-			StatusMessage:       g.Status,
-			Version:             g.Version,
-			Model:               g.Model,
-			ModelParameters:     g.ModelParameters.ToLangfuse(),
-		},
-	}}
-
-	g.observer.enqueue(obsCreate)
-
 	return g
 }
 
 func (g *guardrail) End(opts ...GuardrailOption) {
-	id := g.ObservationID
-	startTime := g.StartTime
-	g.EndTime = getCurrentTimeRef()
-	for _, opt := range opts {
-		opt(g)
-	}
+	g.endOnce.Do(func() {
+		id := g.ObservationID
+		startTime := g.StartTime
+		g.EndTime = getCurrentTimeRef()
+		for _, opt := range opts {
+			opt(g)
+		}
 
-	// preserve the original observation ID and start time
-	g.ObservationID = id
-	g.StartTime = startTime
+		// preserve the original observation ID and start time
+		g.ObservationID = id
+		g.StartTime = startTime
 
-	guardrailUpdate := &api.IngestionEvent{IngestionEventSixteen: &api.IngestionEventSixteen{
-		ID:        newSpanID(),
-		Timestamp: getTimeRefString(g.EndTime),
-		Type:      api.IngestionEventSixteenType(ingestionCreateGuardrail).Ptr(),
-		Body: &api.CreateGenerationBody{
-			ID:              getStringRef(g.ObservationID),
-			Name:            getStringRef(g.Name),
-			Metadata:        g.Metadata,
-			Input:           convertInput(g.Input, g.Tools),
-			Output:          convertOutput(g.Output),
-			EndTime:         g.EndTime,
-			Level:           g.Level.ToLangfuse(),
-			StatusMessage:   g.Status,
-			Version:         g.Version,
-			Model:           g.Model,
-			ModelParameters: g.ModelParameters.ToLangfuse(),
-		},
-	}}
+		otelSpan := buildOtelSpan(otelSpanParams{
+			TraceID:             g.TraceID,
+			ObservationID:       g.ObservationID,
+			ParentObservationID: g.ParentObservationID,
+			Name:                g.Name,
+			ObservationType:     otelObservationTypeGuardrail,
+			StartTime:           g.StartTime,
+			EndTime:             g.EndTime,
+			Level:               g.Level,
+			Status:              g.Status,
+			Version:             g.Version,
+			Input:               convertInput(g.Input, g.Tools),
+			Output:              convertOutput(g.Output),
+			Metadata:            g.Metadata,
+			Model:               g.Model,
+			ModelParameters:     g.ModelParameters,
+			TraceCtx:            g.traceCtx,
+		})
 
-	g.observer.enqueue(guardrailUpdate)
+		g.observer.enqueue(otelSpan)
+	})
 }
 
 func (g *guardrail) String() string {
@@ -221,10 +206,15 @@ func (g *guardrail) MarshalJSON() ([]byte, error) {
 }
 
 func (g *guardrail) Observation(ctx context.Context) (context.Context, Observation) {
+	traceCtx := g.traceCtx
+	if parent, ok := getObservationContext(ctx); ok && parent.TraceCtx != nil {
+		traceCtx = mergeTraceContext(parent.TraceCtx, traceCtx)
+	}
 	obs := &observation{
 		obsCtx: observationContext{
 			TraceID:       g.TraceID,
 			ObservationID: g.ObservationID,
+			TraceCtx:      cloneTraceContext(traceCtx),
 		},
 		observer: g.observer,
 	}

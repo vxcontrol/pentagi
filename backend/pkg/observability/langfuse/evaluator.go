@@ -4,9 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
-
-	"pentagi/pkg/observability/langfuse/api"
 
 	"github.com/vxcontrol/langchaingo/llms"
 )
@@ -41,7 +40,9 @@ type evaluator struct {
 	ObservationID       string `json:"observation_id"`
 	ParentObservationID string `json:"parent_observation_id"`
 
-	observer enqueue `json:"-"`
+	traceCtx *TraceContext `json:"-"`
+	endOnce  sync.Once     `json:"-"`
+	observer enqueue       `json:"-"`
 }
 
 type EvaluatorOption func(*evaluator)
@@ -55,6 +56,12 @@ func withEvaluatorTraceID(traceID string) EvaluatorOption {
 func withEvaluatorParentObservationID(parentObservationID string) EvaluatorOption {
 	return func(e *evaluator) {
 		e.ParentObservationID = parentObservationID
+	}
+}
+
+func withEvaluatorTraceContext(traceCtx *TraceContext) EvaluatorOption {
+	return func(e *evaluator) {
+		e.traceCtx = cloneTraceContext(traceCtx)
 	}
 }
 
@@ -151,65 +158,43 @@ func newEvaluator(observer enqueue, opts ...EvaluatorOption) Evaluator {
 		opt(e)
 	}
 
-	obsCreate := &api.IngestionEvent{IngestionEventFourteen: &api.IngestionEventFourteen{
-		ID:        newSpanID(),
-		Timestamp: getTimeRefString(e.StartTime),
-		Type:      api.IngestionEventFourteenType(ingestionCreateEvaluator).Ptr(),
-		Body: &api.CreateGenerationBody{
-			ID:                  getStringRef(e.ObservationID),
-			TraceID:             getStringRef(e.TraceID),
-			ParentObservationID: getStringRef(e.ParentObservationID),
-			Name:                getStringRef(e.Name),
-			Metadata:            e.Metadata,
-			Input:               convertInput(e.Input, e.Tools),
-			Output:              convertOutput(e.Output),
-			StartTime:           e.StartTime,
-			EndTime:             e.EndTime,
-			Level:               e.Level.ToLangfuse(),
-			StatusMessage:       e.Status,
-			Version:             e.Version,
-			Model:               e.Model,
-			ModelParameters:     e.ModelParameters.ToLangfuse(),
-		},
-	}}
-
-	e.observer.enqueue(obsCreate)
-
 	return e
 }
 
 func (e *evaluator) End(opts ...EvaluatorOption) {
-	id := e.ObservationID
-	startTime := e.StartTime
-	e.EndTime = getCurrentTimeRef()
-	for _, opt := range opts {
-		opt(e)
-	}
+	e.endOnce.Do(func() {
+		id := e.ObservationID
+		startTime := e.StartTime
+		e.EndTime = getCurrentTimeRef()
+		for _, opt := range opts {
+			opt(e)
+		}
 
-	// preserve the original observation ID and start time
-	e.ObservationID = id
-	e.StartTime = startTime
+		// preserve the original observation ID and start time
+		e.ObservationID = id
+		e.StartTime = startTime
 
-	evaluatorUpdate := &api.IngestionEvent{IngestionEventFourteen: &api.IngestionEventFourteen{
-		ID:        newSpanID(),
-		Timestamp: getTimeRefString(e.EndTime),
-		Type:      api.IngestionEventFourteenType(ingestionCreateEvaluator).Ptr(),
-		Body: &api.CreateGenerationBody{
-			ID:              getStringRef(e.ObservationID),
-			Name:            getStringRef(e.Name),
-			Metadata:        e.Metadata,
-			Input:           convertInput(e.Input, e.Tools),
-			Output:          convertOutput(e.Output),
-			EndTime:         e.EndTime,
-			Level:           e.Level.ToLangfuse(),
-			StatusMessage:   e.Status,
-			Version:         e.Version,
-			Model:           e.Model,
-			ModelParameters: e.ModelParameters.ToLangfuse(),
-		},
-	}}
+		otelSpan := buildOtelSpan(otelSpanParams{
+			TraceID:             e.TraceID,
+			ObservationID:       e.ObservationID,
+			ParentObservationID: e.ParentObservationID,
+			Name:                e.Name,
+			ObservationType:     otelObservationTypeEvaluator,
+			StartTime:           e.StartTime,
+			EndTime:             e.EndTime,
+			Level:               e.Level,
+			Status:              e.Status,
+			Version:             e.Version,
+			Input:               convertInput(e.Input, e.Tools),
+			Output:              convertOutput(e.Output),
+			Metadata:            e.Metadata,
+			Model:               e.Model,
+			ModelParameters:     e.ModelParameters,
+			TraceCtx:            e.traceCtx,
+		})
 
-	e.observer.enqueue(evaluatorUpdate)
+		e.observer.enqueue(otelSpan)
+	})
 }
 
 func (e *evaluator) String() string {
@@ -221,10 +206,15 @@ func (e *evaluator) MarshalJSON() ([]byte, error) {
 }
 
 func (e *evaluator) Observation(ctx context.Context) (context.Context, Observation) {
+	traceCtx := e.traceCtx
+	if parent, ok := getObservationContext(ctx); ok && parent.TraceCtx != nil {
+		traceCtx = mergeTraceContext(parent.TraceCtx, traceCtx)
+	}
 	obs := &observation{
 		obsCtx: observationContext{
 			TraceID:       e.TraceID,
 			ObservationID: e.ObservationID,
+			TraceCtx:      cloneTraceContext(traceCtx),
 		},
 		observer: e.observer,
 	}

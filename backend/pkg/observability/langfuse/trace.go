@@ -1,6 +1,10 @@
 package langfuse
 
-import "time"
+import (
+	"maps"
+	"slices"
+	"time"
+)
 
 type TraceContext struct {
 	Timestamp *time.Time `json:"timestamp,omitempty"`
@@ -13,6 +17,61 @@ type TraceContext struct {
 	Metadata  Metadata   `json:"metadata,omitempty"`
 	Tags      []string   `json:"tags,omitempty"`
 	Public    *bool      `json:"public,omitempty"`
+}
+
+func cloneTraceContext(src *TraceContext) *TraceContext {
+	if src == nil {
+		return nil
+	}
+	cp := *src
+	if src.Metadata != nil {
+		cp.Metadata = maps.Clone(src.Metadata)
+	}
+	if src.Tags != nil {
+		cp.Tags = slices.Clone(src.Tags)
+	}
+	return &cp
+}
+
+func mergeTraceContext(base, update *TraceContext) *TraceContext {
+	if update == nil {
+		return cloneTraceContext(base)
+	}
+	if base == nil {
+		return cloneTraceContext(update)
+	}
+	merged := cloneTraceContext(base)
+	if update.Timestamp != nil {
+		merged.Timestamp = update.Timestamp
+	}
+	if update.Name != nil {
+		merged.Name = update.Name
+	}
+	if update.UserID != nil {
+		merged.UserID = update.UserID
+	}
+	if update.Input != nil {
+		merged.Input = update.Input
+	}
+	if update.Output != nil {
+		merged.Output = update.Output
+	}
+	if update.SessionID != nil {
+		merged.SessionID = update.SessionID
+	}
+	if update.Version != nil {
+		merged.Version = update.Version
+	}
+	if update.Metadata != nil {
+		merged.Metadata = mergeMaps(merged.Metadata, update.Metadata)
+	}
+	if len(update.Tags) > 0 {
+		merged.Tags = slices.Clone(update.Tags)
+	}
+	if update.Public != nil {
+		merged.Public = update.Public
+	}
+	return merged
 }
 
 type TraceContextOption func(*TraceContext)

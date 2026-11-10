@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
-
-	"pentagi/pkg/observability/langfuse/api"
 )
 
 const (
@@ -34,7 +32,8 @@ type event struct {
 	ObservationID       string `json:"observation_id"`
 	ParentObservationID string `json:"parent_observation_id"`
 
-	observer enqueue `json:"-"`
+	traceCtx *TraceContext `json:"-"`
+	observer enqueue       `json:"-"`
 }
 
 type EventOption func(*event)
@@ -48,6 +47,12 @@ func withEventTraceID(traceID string) EventOption {
 func withEventParentObservationID(parentObservationID string) EventOption {
 	return func(e *event) {
 		e.ParentObservationID = parentObservationID
+	}
+}
+
+func withEventTraceContext(traceCtx *TraceContext) EventOption {
+	return func(e *event) {
+		e.traceCtx = cloneTraceContext(traceCtx)
 	}
 }
 
@@ -113,26 +118,24 @@ func newEvent(observer enqueue, opts ...EventOption) Event {
 		opt(e)
 	}
 
-	obsCreate := &api.IngestionEvent{IngestionEventSix: &api.IngestionEventSix{
-		ID:        newSpanID(),
-		Timestamp: getTimeRefString(e.Time),
-		Type:      api.IngestionEventSixType(ingestionCreateEvent).Ptr(),
-		Body: &api.CreateEventBody{
-			ID:                  getStringRef(e.ObservationID),
-			TraceID:             getStringRef(e.TraceID),
-			ParentObservationID: getStringRef(e.ParentObservationID),
-			Name:                getStringRef(e.Name),
-			StartTime:           e.Time,
-			Metadata:            e.Metadata,
-			Input:               e.Input,
-			Output:              e.Output,
-			Level:               e.Level.ToLangfuse(),
-			StatusMessage:       e.Status,
-			Version:             e.Version,
-		},
-	}}
+	otelSpan := buildOtelSpan(otelSpanParams{
+		TraceID:             e.TraceID,
+		ObservationID:       e.ObservationID,
+		ParentObservationID: e.ParentObservationID,
+		Name:                e.Name,
+		ObservationType:     otelObservationTypeEvent,
+		StartTime:           e.Time,
+		EndTime:             e.Time,
+		Level:               e.Level,
+		Status:              e.Status,
+		Version:             e.Version,
+		Input:               convertInput(e.Input, nil),
+		Output:              convertOutput(e.Output),
+		Metadata:            e.Metadata,
+		TraceCtx:            e.traceCtx,
+	})
 
-	e.observer.enqueue(obsCreate)
+	e.observer.enqueue(otelSpan)
 
 	return e
 }
@@ -147,10 +150,15 @@ func (e *event) MarshalJSON() ([]byte, error) {
 }
 
 func (e *event) Observation(ctx context.Context) (context.Context, Observation) {
+	traceCtx := e.traceCtx
+	if parent, ok := getObservationContext(ctx); ok && parent.TraceCtx != nil {
+		traceCtx = mergeTraceContext(parent.TraceCtx, traceCtx)
+	}
 	obs := &observation{
 		obsCtx: observationContext{
 			TraceID:       e.TraceID,
 			ObservationID: e.ObservationID,
+			TraceCtx:      cloneTraceContext(traceCtx),
 		},
 		observer: e.observer,
 	}
