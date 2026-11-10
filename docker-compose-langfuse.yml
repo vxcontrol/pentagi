@@ -20,7 +20,7 @@ networks:
 
 services:
   langfuse-worker:
-    image: ${LANGFUSE_WORKER_IMAGE:-langfuse/langfuse-worker:3}
+    image: ${LANGFUSE_WORKER_IMAGE:-langfuse/langfuse-worker:4}
     restart: unless-stopped
     container_name: langfuse-worker
     hostname: langfuse-worker
@@ -92,7 +92,7 @@ services:
       - langfuse-network
 
   langfuse-web:
-    image: ${LANGFUSE_WEB_IMAGE:-langfuse/langfuse:3}
+    image: ${LANGFUSE_WEB_IMAGE:-langfuse/langfuse:4}
     restart: unless-stopped
     container_name: langfuse-web
     hostname: langfuse-web
