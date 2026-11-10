@@ -43,6 +43,14 @@ This document provides a comprehensive guide to the Langfuse integration in Pent
 
 ## Introduction
 
+### Upgrading the self-hosted stack to Langfuse v4
+
+The Compose stack uses Langfuse v4 and ClickHouse 26.4. Before upgrading an existing deployment, follow the [official v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4): back up your data, upgrade ClickHouse first while still running Langfuse v3, and verify the required ClickHouse permissions. Update existing `.env` image overrides as well; changing Compose defaults does not replace them.
+
+The default configuration uses `events_only`, `direct` OTel ingestion, the new read experience, and historic backfill enabled. This matches v4 defaults and the PentAGI OTLP client. Backfill requires approximately three times the current ClickHouse data volume in available capacity.
+
+For a staged migration with older producers or legacy API consumers, set `LANGFUSE_MIGRATION_V4_WRITE_MODE=dual`, `LANGFUSE_MIGRATION_V4_NATIVE_OTEL_BEHAVIOUR=dual_write`, and `LANGFUSE_BACKGROUND_MIGRATION_V4_ENABLE_HISTORIC_BACKFILL=false`. Keep `LANGFUSE_MIGRATION_V4_ALLOW_PREVIEW_OPT_IN=true` to allow the new read experience. Enable backfill after dual writing is confirmed healthy, then switch to `events_only` and `direct` after migrating producers, consumers, and historic data. Do not leave backfill disabled unless intentionally using the retention-based rollover described in the official guide.
+
 Langfuse is an open-source observability platform specifically designed for LLM-powered applications. The PentAGI integration with Langfuse provides:
 
 - **Comprehensive tracing** for AI agent flows and tasks

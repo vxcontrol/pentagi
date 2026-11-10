@@ -36,6 +36,10 @@ services:
     expose:
       - 3030/tcp
     environment: &langfuse-worker-env
+      LANGFUSE_MIGRATION_V4_WRITE_MODE: ${LANGFUSE_MIGRATION_V4_WRITE_MODE:-events_only}
+      LANGFUSE_MIGRATION_V4_NATIVE_OTEL_BEHAVIOUR: ${LANGFUSE_MIGRATION_V4_NATIVE_OTEL_BEHAVIOUR:-direct}
+      LANGFUSE_MIGRATION_V4_ALLOW_PREVIEW_OPT_IN: ${LANGFUSE_MIGRATION_V4_ALLOW_PREVIEW_OPT_IN:-true}
+      LANGFUSE_BACKGROUND_MIGRATION_V4_ENABLE_HISTORIC_BACKFILL: ${LANGFUSE_BACKGROUND_MIGRATION_V4_ENABLE_HISTORIC_BACKFILL:-true}
       NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:${LANGFUSE_LISTEN_PORT:-4000}}
       DATABASE_URL: postgresql://${LANGFUSE_POSTGRES_USER:-postgres}:${LANGFUSE_POSTGRES_PASSWORD:-postgres}@langfuse-postgres:5432/${LANGFUSE_POSTGRES_DB:-langfuse}
       SALT: ${LANGFUSE_SALT:-myglobalsalt} # change this to a random string
@@ -147,7 +151,7 @@ services:
       - pentagi-network
 
   clickhouse:
-    image: ${CLICKHOUSE_IMAGE:-clickhouse/clickhouse-server:24}
+    image: ${CLICKHOUSE_IMAGE:-clickhouse/clickhouse-server:26.4}
     restart: unless-stopped
     user: "101:101"
     container_name: langfuse-clickhouse
