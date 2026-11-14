@@ -98,3 +98,61 @@ func TestCookies_SessionOptions_MarksTheOAuthSessionCookieSecureBehindATLSTermin
 	}
 	t.Fatal("the OAuth login wrote no session cookie")
 }
+
+func TestCookies_SessionOptions_ReadsTheSchemeFromEveryCommonProxyHeader(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	seedLocalUser(t, db, "known@corp.com")
+
+	gin.SetMode(gin.TestMode)
+	authSvc := NewAuthService(AuthServiceConfig{BaseURL: "/", SessionTimeout: 3600}, db, map[string]oauth.OAuthClient{}, nil)
+
+	engine := gin.New()
+	require.NoError(t, engine.SetTrustedProxies(nil))
+	engine.Use(sessions.Sessions("pentagi", cookie.NewStore([]byte("test-secret"))))
+	engine.POST("/auth/login", authSvc.AuthLogin)
+
+	tests := []struct {
+		name   string
+		header http.Header
+		secure bool
+	}{
+		{"plain http without proxy headers", http.Header{}, false},
+		{"x-forwarded-proto https", http.Header{"X-Forwarded-Proto": {"https"}}, true},
+		{"x-forwarded-proto upper case", http.Header{"X-Forwarded-Proto": {"HTTPS"}}, true},
+		{"x-forwarded-proto chain keeps the client-facing hop", http.Header{"X-Forwarded-Proto": {"https, http"}}, true},
+		{"x-forwarded-proto http", http.Header{"X-Forwarded-Proto": {"http"}}, false},
+		{"x-forwarded-proto chain starting with http", http.Header{"X-Forwarded-Proto": {"http, https"}}, false},
+		{"x-forwarded-ssl on", http.Header{"X-Forwarded-Ssl": {"on"}}, true},
+		{"x-forwarded-ssl off", http.Header{"X-Forwarded-Ssl": {"off"}}, false},
+		{"forwarded proto https", http.Header{"Forwarded": {"for=192.0.2.1;proto=https;host=example.com"}}, true},
+		{"forwarded quoted proto", http.Header{"Forwarded": {`for="[2001:db8::1]";Proto="https"`}}, true},
+		{"forwarded proto http", http.Header{"Forwarded": {"for=192.0.2.1;proto=http"}}, false},
+		{"forwarded proto only on an inner hop", http.Header{"Forwarded": {"for=192.0.2.1;proto=http, for=10.0.0.1;proto=https"}}, false},
+		{"forwarded without proto", http.Header{"Forwarded": {"for=192.0.2.1"}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/auth/login",
+				strings.NewReader(`{"mail":"known@corp.com","password":"`+knownAccountPassword+`"}`))
+			for k, v := range tt.header {
+				req.Header[k] = v
+			}
+			req.Header.Set("Content-Type", "application/json")
+			req.RemoteAddr = "10.0.0.1:54321"
+
+			rec := httptest.NewRecorder()
+			engine.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+			for _, c := range rec.Result().Cookies() {
+				if c.Name == "pentagi" {
+					assert.Equal(t, tt.secure, c.Secure)
+					return
+				}
+			}
+			t.Fatal("the login wrote no session cookie")
+		})
+	}
+}

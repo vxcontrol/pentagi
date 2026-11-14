@@ -588,6 +588,8 @@ Left empty behind a reverse proxy, every request is attributed to the proxy's ow
 address, so the per-address login rate limit becomes a single budget shared by all
 users. Set it to the addresses or CIDRs of the proxies in front of PentAGI.
 
+When a reverse proxy terminates TLS and talks to PentAGI over plain HTTP (`SERVER_USE_SSL=false`), the server learns that the browser used HTTPS only from the proxy's headers: `X-Forwarded-Proto: https`, `X-Forwarded-Ssl: on` or `Forwarded: proto=https`. If the proxy sends none of them, the session and OAuth cookies are issued without `Secure`, and Google login fails because browsers reject a `SameSite=None` cookie that is not `Secure`. With nginx, add `proxy_set_header X-Forwarded-Proto $scheme;` to the `location` that proxies PentAGI. PentAGI does not send `Strict-Transport-Security`; add it at the proxy.
+
 ### Usage Details
 
 These settings are used in `main.go` to configure and start the HTTP server:
