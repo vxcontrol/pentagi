@@ -1709,6 +1709,7 @@ type SearchEnginesConfig struct {
 	SploitusEnabled   loader.EnvVar // SPLOITUS_ENABLED
 	PerplexityAPIKey  loader.EnvVar // PERPLEXITY_API_KEY
 	TavilyAPIKey      loader.EnvVar // TAVILY_API_KEY
+	SpecstreamAPIKey  loader.EnvVar // SPECSTREAM_API_KEY
 	FirecrawlAPIKey   loader.EnvVar // FIRECRAWL_API_KEY
 	FirecrawlAPIURL   loader.EnvVar // FIRECRAWL_API_URL
 	TraversaalAPIKey  loader.EnvVar // TRAVERSAAL_API_KEY
@@ -1753,6 +1754,7 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 	sploitusEnabled, _ := c.GetVar("SPLOITUS_ENABLED")
 	perplexityAPIKey, _ := c.GetVar("PERPLEXITY_API_KEY")
 	tavilyAPIKey, _ := c.GetVar("TAVILY_API_KEY")
+	specstreamAPIKey, _ := c.GetVar("SPECSTREAM_API_KEY")
 	firecrawlAPIKey, _ := c.GetVar("FIRECRAWL_API_KEY")
 	firecrawlAPIURL, _ := c.GetVar("FIRECRAWL_API_URL")
 	traversaalAPIKey, _ := c.GetVar("TRAVERSAAL_API_KEY")
@@ -1783,6 +1785,7 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 		PerplexityContextSize:         perplexityContextSize,
 		PerplexityTimeout:             perplexityTimeout,
 		TavilyAPIKey:                  tavilyAPIKey,
+		SpecstreamAPIKey:              specstreamAPIKey,
 		FirecrawlAPIKey:               firecrawlAPIKey,
 		FirecrawlAPIURL:               firecrawlAPIURL,
 		TraversaalAPIKey:              traversaalAPIKey,
@@ -1816,6 +1819,9 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 		configuredCount++
 	}
 	if tavilyAPIKey.Value != "" {
+		configuredCount++
+	}
+	if specstreamAPIKey.Value != "" {
 		configuredCount++
 	}
 	if firecrawlAPIKey.Value != "" {
@@ -1876,6 +1882,9 @@ func (c *controller) UpdateSearchEnginesConfig(config *SearchEnginesConfig) erro
 	}
 	if err := c.SetVar("TAVILY_API_KEY", config.TavilyAPIKey.Value); err != nil {
 		return fmt.Errorf("failed to set TAVILY_API_KEY: %w", err)
+	}
+	if err := c.SetVar("SPECSTREAM_API_KEY", config.SpecstreamAPIKey.Value); err != nil {
+		return fmt.Errorf("failed to set SPECSTREAM_API_KEY: %w", err)
 	}
 	if err := c.SetVar("FIRECRAWL_API_KEY", config.FirecrawlAPIKey.Value); err != nil {
 		return fmt.Errorf("failed to set FIRECRAWL_API_KEY: %w", err)
@@ -1940,6 +1949,7 @@ func (c *controller) ResetSearchEnginesConfig() *SearchEnginesConfig {
 		"PERPLEXITY_CONTEXT_SIZE",
 		"PERPLEXITY_TIMEOUT",
 		"TAVILY_API_KEY",
+		"SPECSTREAM_API_KEY",
 		"FIRECRAWL_API_KEY",
 		"FIRECRAWL_API_URL",
 		"TRAVERSAAL_API_KEY",

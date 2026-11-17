@@ -1743,6 +1743,8 @@ Get API keys from:
 	ToolsSearchEnginesPerplexityTimeoutDesc    = "Perplexity request timeout in seconds (empty: 120)"
 	ToolsSearchEnginesTavilyKey                = "Tavily API Key"
 	ToolsSearchEnginesTavilyKeyDesc            = "API key for Tavily search service"
+	ToolsSearchEnginesSpecstreamKey                = "SpecStream API Key"
+	ToolsSearchEnginesSpecstreamKeyDesc            = "API key for SpecStream search service"
 	ToolsSearchEnginesFirecrawlKey             = "Firecrawl API Key"
 	ToolsSearchEnginesFirecrawlKeyDesc         = "API key for Firecrawl search service"
 	ToolsSearchEnginesFirecrawlURL             = "Firecrawl API URL"

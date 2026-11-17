@@ -231,6 +231,7 @@ type Config struct {
 
 	// === Search Engine: Tavily AI ===
 	TavilyAPIKey string `env:"TAVILY_API_KEY"`
+	SpecstreamAPIKey string `env:"SPECSTREAM_API_KEY"`
 
 	// === Search Engine: Firecrawl ===
 	FirecrawlAPIKey string `env:"FIRECRAWL_API_KEY"`
@@ -525,6 +526,7 @@ func (c *Config) GetSecretPatterns() []patterns.Pattern {
 		{c.OAuthGithubClientSecret, "Github Client Secret"},
 		{c.TraversaalAPIKey, "Traversaal Key"},
 		{c.TavilyAPIKey, "Tavily Key"},
+		{c.SpecstreamAPIKey, "Specstream Key"},
 		{c.FirecrawlAPIKey, "Firecrawl Key"},
 		{c.PerplexityAPIKey, "Perplexity Key"},
 		{c.ProxyURL, "Proxy URL"},
