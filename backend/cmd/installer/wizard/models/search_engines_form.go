@@ -120,6 +120,13 @@ func (m *SearchEnginesFormModel) BuildForm() tea.Cmd {
 		config.TavilyAPIKey,
 	))
 
+	// SpecStream API Key
+	fields = append(fields, m.createAPIKeyField("specstream_api_key",
+		locale.ToolsSearchEnginesSpecstreamKey,
+		locale.ToolsSearchEnginesSpecstreamKeyDesc,
+		config.SpecstreamAPIKey,
+	))
+
 	// Firecrawl API Key
 	fields = append(fields, m.createAPIKeyField("firecrawl_api_key",
 		locale.ToolsSearchEnginesFirecrawlKey,
@@ -418,6 +425,15 @@ func (m *SearchEnginesFormModel) GetCurrentConfiguration() string {
 			m.GetStyles().Warning.Render(locale.StatusNotConfigured)))
 	}
 
+	// SpecStream
+	if config.SpecstreamAPIKey.Value != "" {
+		sections = append(sections, fmt.Sprintf("• SpecStream: %s",
+			m.GetStyles().Success.Render(locale.StatusConfigured)))
+	} else {
+		sections = append(sections, fmt.Sprintf("• SpecStream: %s",
+			m.GetStyles().Warning.Render(locale.StatusNotConfigured)))
+	}
+
 	// Firecrawl
 	if config.FirecrawlAPIKey.Value != "" {
 		sections = append(sections, fmt.Sprintf("• Firecrawl: %s",
@@ -509,6 +525,7 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 		PerplexityContextSize:         config.PerplexityContextSize,
 		PerplexityTimeout:             config.PerplexityTimeout,
 		TavilyAPIKey:                  config.TavilyAPIKey,
+		SpecstreamAPIKey:              config.SpecstreamAPIKey,
 		FirecrawlAPIKey:               config.FirecrawlAPIKey,
 		FirecrawlAPIURL:               config.FirecrawlAPIURL,
 		TraversaalAPIKey:              config.TraversaalAPIKey,
@@ -564,6 +581,8 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 			newConfig.PerplexityTimeout.Value = value
 		case "tavily_api_key":
 			newConfig.TavilyAPIKey.Value = value
+		case "specstream_api_key":
+			newConfig.SpecstreamAPIKey.Value = value
 		case "firecrawl_api_key":
 			newConfig.FirecrawlAPIKey.Value = value
 		case "firecrawl_api_url":
