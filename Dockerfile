@@ -168,6 +168,7 @@ COPY --from=api-builder /licenses/backend /opt/pentagi/licenses/backend
 COPY --from=frontend-compiler /licenses/frontend /opt/pentagi/licenses/frontend
 
 # Copy provider configuration files
+COPY examples/configs/abliteratedllm.provider.yml /opt/pentagi/conf/
 COPY examples/configs/atlas.provider.yml /opt/pentagi/conf/
 COPY examples/configs/azure-openai.provider.yml /opt/pentagi/conf/
 COPY examples/configs/bedrock-glm-flash.provider.yml /opt/pentagi/conf/
