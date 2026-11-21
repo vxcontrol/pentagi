@@ -134,10 +134,18 @@ func (t *terminal) Handle(ctx context.Context, name string, args json.RawMessage
 
 	switch name {
 	case TerminalToolName:
+		if !json.Valid(args) {
+			logger.Error("failed to unmarshal terminal action: invalid JSON")
+			return "", fmt.Errorf("failed to unmarshal terminal action: invalid JSON: %s", string(args))
+		}
 		var action TerminalAction
 		if err := json.Unmarshal(args, &action); err != nil {
 			logger.WithError(err).Error("failed to unmarshal terminal action")
 			return "", fmt.Errorf("failed to unmarshal terminal action: %w", err)
+		}
+		if err := validateTerminalAction(&action); err != nil {
+			logger.WithError(err).Error("invalid terminal action")
+			return "", fmt.Errorf("invalid terminal action: %w", err)
 		}
 		timeout := t.normalizeExecTimeout(time.Duration(action.Timeout) * time.Second)
 		if timeout > 0 {
@@ -193,12 +201,122 @@ func (t *terminal) Handle(ctx context.Context, name string, args json.RawMessage
 	}
 }
 
+var truncatedIPToken = regexp.MustCompile(`(?:^|\s)\d{1,3}(?:\.\d{1,3}){0,2}\.$`)
+
+func validateTerminalCommand(cmd string) error {
+	trimmed := strings.TrimSpace(cmd)
+	if trimmed == "" {
+		return fmt.Errorf("command is required and cannot be empty")
+	}
+
+	trailingBackslashes := 0
+	for i := len(cmd) - 1; i >= 0; i-- {
+		if cmd[i] == '\\' {
+			trailingBackslashes++
+		} else {
+			break
+		}
+	}
+	if trailingBackslashes%2 != 0 {
+		return fmt.Errorf("command ends with an incomplete escape sequence or trailing backslash")
+	}
+
+	inSingleQuote := false
+	inDoubleQuote := false
+	inBacktick := false
+	escaped := false
+	parenDepth := 0
+
+	for i := 0; i < len(cmd); i++ {
+		c := cmd[i]
+
+		if escaped {
+			escaped = false
+			continue
+		}
+
+		if inSingleQuote {
+			if c == '\'' {
+				inSingleQuote = false
+			}
+			continue
+		}
+
+		if c == '\\' {
+			escaped = true
+			continue
+		}
+
+		if inDoubleQuote {
+			if c == '"' {
+				inDoubleQuote = false
+			}
+			continue
+		}
+
+		if inBacktick {
+			if c == '`' {
+				inBacktick = false
+			}
+			continue
+		}
+
+		switch c {
+		case '\'':
+			inSingleQuote = true
+		case '"':
+			inDoubleQuote = true
+		case '`':
+			inBacktick = true
+		case '(':
+			parenDepth++
+		case ')':
+			if parenDepth > 0 {
+				parenDepth--
+			}
+		}
+	}
+
+	if inSingleQuote {
+		return fmt.Errorf("command has unclosed single quote: truncated input detected")
+	}
+	if inDoubleQuote {
+		return fmt.Errorf("command has unclosed double quote: truncated input detected")
+	}
+	if inBacktick {
+		return fmt.Errorf("command has unclosed backtick: truncated input detected")
+	}
+	if parenDepth > 0 {
+		return fmt.Errorf("command has unclosed parenthesis: truncated input detected")
+	}
+
+	trailingIncomplete := []string{"&&", "||", "|", ">>", ">", "<", "2>", "&>"}
+	for _, op := range trailingIncomplete {
+		if trimmed == op || strings.HasSuffix(trimmed, " "+op) || strings.HasSuffix(trimmed, "\t"+op) {
+			return fmt.Errorf("command ends with incomplete shell operator %q: truncated input detected", op)
+		}
+	}
+
+	if truncatedIPToken.MatchString(trimmed) {
+		return fmt.Errorf("command ends with incomplete IP address or token: truncated input detected")
+	}
+
+	return nil
+}
+
+func validateTerminalAction(action *TerminalAction) error {
+	return validateTerminalCommand(action.Input)
+}
+
 func (t *terminal) ExecCommand(
 	ctx context.Context,
 	cwd, command string,
 	detach bool,
 	timeout time.Duration,
 ) (string, error) {
+	if err := validateTerminalCommand(command); err != nil {
+		return "", err
+	}
 	containerName := PrimaryTerminalName(t.tenantPrefix, t.flowID)
 
 	cmd := docker.SandboxCommand(command)

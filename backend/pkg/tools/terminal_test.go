@@ -45,6 +45,72 @@ func TestTerminal_Handle_RejectsACallItCannotDispatch(t *testing.T) {
 			want: "failed to unmarshal terminal action",
 		},
 		{
+			name: "terminal command that is empty",
+			tool: TerminalToolName,
+			args: `{"input":"","cwd":"/work","detach":false,"timeout":60,"message":"m"}`,
+			want: "command is required and cannot be empty",
+		},
+		{
+			name: "terminal command that is whitespace only",
+			tool: TerminalToolName,
+			args: `{"input":"   \t  ","cwd":"/work","detach":false,"timeout":60,"message":"m"}`,
+			want: "command is required and cannot be empty",
+		},
+		{
+			name: "terminal command with unclosed single quote",
+			tool: TerminalToolName,
+			args: `{"input":"nmap -sV '192.168.1.1","cwd":"/work","detach":false,"timeout":60,"message":"m"}`,
+			want: "command has unclosed single quote: truncated input detected",
+		},
+		{
+			name: "terminal command with unclosed double quote",
+			tool: TerminalToolName,
+			args: `{"input":"echo \"hello world","cwd":"/work","detach":false,"timeout":60,"message":"m"}`,
+			want: "command has unclosed double quote: truncated input detected",
+		},
+		{
+			name: "terminal command with unclosed backtick",
+			tool: TerminalToolName,
+			args: "{\"input\":\"echo `uname -a\",\"cwd\":\"/work\",\"detach\":false,\"timeout\":60,\"message\":\"m\"}",
+			want: "command has unclosed backtick: truncated input detected",
+		},
+		{
+			name: "terminal command with unclosed parenthesis",
+			tool: TerminalToolName,
+			args: `{"input":"echo $(whoami","cwd":"/work","detach":false,"timeout":60,"message":"m"}`,
+			want: "command has unclosed parenthesis: truncated input detected",
+		},
+		{
+			name: "terminal command with trailing backslash",
+			tool: TerminalToolName,
+			args: `{"input":"nmap -Pn \\","cwd":"/work","detach":false,"timeout":60,"message":"m"}`,
+			want: "command ends with an incomplete escape sequence or trailing backslash",
+		},
+		{
+			name: "terminal command with incomplete pipe operator",
+			tool: TerminalToolName,
+			args: `{"input":"cat /etc/passwd |","cwd":"/work","detach":false,"timeout":60,"message":"m"}`,
+			want: "command ends with incomplete shell operator",
+		},
+		{
+			name: "terminal command with incomplete boolean and operator",
+			tool: TerminalToolName,
+			args: `{"input":"nmap -sV target &&","cwd":"/work","detach":false,"timeout":60,"message":"m"}`,
+			want: "command ends with incomplete shell operator",
+		},
+		{
+			name: "terminal command with incomplete redirection",
+			tool: TerminalToolName,
+			args: `{"input":"nmap -sV target >","cwd":"/work","detach":false,"timeout":60,"message":"m"}`,
+			want: "command ends with incomplete shell operator",
+		},
+		{
+			name: "terminal command with truncated IP token ending in dot",
+			tool: TerminalToolName,
+			args: `{"input":"nmap -sV 192.168.","cwd":"/work","detach":false,"timeout":60,"message":"m"}`,
+			want: "command ends with incomplete IP address or token: truncated input detected",
+		},
+		{
 			name: "file arguments that are not JSON",
 			tool: FileToolName,
 			args: `{"path":`,
@@ -1225,4 +1291,72 @@ func terminalRecorded(tlp *recordingTermLog, state termLogState) []int64 {
 		containers = append(containers, entry.containerID)
 	}
 	return containers
+}
+
+func TestTerminal_ValidateTerminalCommand(t *testing.T) {
+	validCommands := []string{
+		"id",
+		"ls -la /work",
+		"nmap -Pn -sT -sV -T3 -p- --min-rate 500 -oN /tmp/scan.txt 192.168.1.10",
+		"echo 'hello world'",
+		`echo "escaped \"quotes\" inside"`,
+		"cat << 'EOF'\nmulti-line\nEOF",
+		"echo $(uname -a)",
+		"cmd1 && cmd2 || cmd3",
+		"ls | grep foo",
+		"sleep 10 &",
+		"echo \\\\",
+		"ls .",
+		"python3 script.py",
+	}
+
+	for _, cmd := range validCommands {
+		err := validateTerminalCommand(cmd)
+		assert.NoError(t, err, "expected command %q to be valid", cmd)
+	}
+
+	invalidCommands := []struct {
+		cmd     string
+		wantErr string
+	}{
+		{"", "command is required and cannot be empty"},
+		{"   \t\n  ", "command is required and cannot be empty"},
+		{"nmap -sV '192.168.1.1", "unclosed single quote"},
+		{"nmap -sV \"192.168.1.1", "unclosed double quote"},
+		{"echo `uname", "unclosed backtick"},
+		{"echo $(whoami", "unclosed parenthesis"},
+		{"nmap -Pn \\", "incomplete escape sequence or trailing backslash"},
+		{"cat file |", "incomplete shell operator \"|\""},
+		{"nmap target &&", "incomplete shell operator \"&&\""},
+		{"nmap target ||", "incomplete shell operator \"||\""},
+		{"nmap target >", "incomplete shell operator \">\""},
+		{"nmap target >>", "incomplete shell operator \">>\""},
+		{"nmap target <", "incomplete shell operator \"<\""},
+		{"nmap target 2>", "incomplete shell operator \"2>\""},
+		{"nmap target &>", "incomplete shell operator \"&>\""},
+		{"nmap -sV 192.168.", "incomplete IP address or token"},
+		{"nmap -sV 10.0.", "incomplete IP address or token"},
+	}
+
+	for _, tc := range invalidCommands {
+		err := validateTerminalCommand(tc.cmd)
+		require.Error(t, err, "expected command %q to fail validation", tc.cmd)
+		assert.Contains(t, err.Error(), tc.wantErr)
+	}
+}
+
+func TestTerminal_ExecCommand_RejectsInvalidCommand(t *testing.T) {
+	mock := &fakeDockerClient{isRunning: true}
+	tlp := &recordingTermLog{}
+	term := terminalFor(mock, tlp)
+
+	_, err := term.ExecCommand(t.Context(), "/work", "", false, time.Minute)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "command is required and cannot be empty")
+	assert.Empty(t, mock.execCreated.Cmd, "no container exec process may be created")
+
+	_, err = term.ExecCommand(t.Context(), "/work", "nmap -sV 'target", false, time.Minute)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unclosed single quote")
+	assert.Empty(t, mock.execCreated.Cmd, "no container exec process may be created")
 }
