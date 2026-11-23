@@ -1,0 +1,164 @@
+# AbliteratedLLM provider configuration (OpenAI-compatible).
+# Use via the custom LLM endpoint:
+#   LLM_SERVER_URL=https://api.abliteratedllm.dev/v1
+#   LLM_SERVER_KEY=<AbliteratedLLM API key>
+#   LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/abliteratedllm.provider.yml
+#   LLM_SERVER_PRESERVE_REASONING=true   # both models return reasoning_content
+# glm-5.3-cyber-abliterated is GLM-5.3 with refusals removed by a weight edit aimed at
+# cybersecurity work (weights: huggingface.co/dealignai/GLM-5.3-CYBERSECURITY-FP8). It
+# always reasons and supports reasoning effort low and high only; the API runs any other
+# level at the nearer of the two (none and minimal as low; medium, xhigh and max as high).
+# glm-5.3-flash-abliterated takes the lightweight roles. Both: 1,048,576-token context,
+# 131,072 max output tokens. Prices in USD per 1M tokens from https://api.abliteratedllm.dev/v1/models.
+
+simple:
+  model: "glm-5.3-flash-abliterated"
+  temperature: 0.3
+  top_p: 0.9
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    effort: low
+  price:
+    input: 0.0977
+    output: 0.3421
+    cache_read: 0.0098
+
+simple_json:
+  model: "glm-5.3-flash-abliterated"
+  temperature: 0.3
+  top_p: 1.0
+  n: 1
+  max_tokens: 8192
+  json: true
+  reasoning:
+    effort: low
+  price:
+    input: 0.0977
+    output: 0.3421
+    cache_read: 0.0098
+
+primary_agent:
+  model: "glm-5.3-cyber-abliterated"
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 0.90
+    output: 1.80
+    cache_read: 0.135
+
+assistant:
+  model: "glm-5.3-cyber-abliterated"
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 0.90
+    output: 1.80
+    cache_read: 0.135
+
+generator:
+  model: "glm-5.3-cyber-abliterated"
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    effort: high
+  price:
+    input: 0.90
+    output: 1.80
+    cache_read: 0.135
+
+refiner:
+  model: "glm-5.3-cyber-abliterated"
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    effort: high
+  price:
+    input: 0.90
+    output: 1.80
+    cache_read: 0.135
+
+adviser:
+  model: "glm-5.3-cyber-abliterated"
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    effort: high
+  price:
+    input: 0.90
+    output: 1.80
+    cache_read: 0.135
+
+reflector:
+  model: "glm-5.3-flash-abliterated"
+  temperature: 0.5
+  top_p: 1.0
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    effort: low
+  price:
+    input: 0.0977
+    output: 0.3421
+    cache_read: 0.0098
+
+searcher:
+  model: "glm-5.3-flash-abliterated"
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    effort: low
+  price:
+    input: 0.0977
+    output: 0.3421
+    cache_read: 0.0098
+
+enricher:
+  model: "glm-5.3-flash-abliterated"
+  temperature: 0.5
+  top_p: 1.0
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    effort: low
+  price:
+    input: 0.0977
+    output: 0.3421
+    cache_read: 0.0098
+
+coder:
+  model: "glm-5.3-cyber-abliterated"
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    effort: high
+  price:
+    input: 0.90
+    output: 1.80
+    cache_read: 0.135
+
+installer:
+  model: "glm-5.3-flash-abliterated"
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: low
+  price:
+    input: 0.0977
+    output: 0.3421
+    cache_read: 0.0098
+
+pentester:
+  model: "glm-5.3-cyber-abliterated"
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 0.90
+    output: 1.80
+    cache_read: 0.135
