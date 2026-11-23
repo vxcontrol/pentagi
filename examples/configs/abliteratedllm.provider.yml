@@ -6,7 +6,7 @@
 #   LLM_SERVER_PRESERVE_REASONING=true   # both models return reasoning_content
 # glm-5.3-cyber-abliterated is GLM-5.3 with refusals removed by a weight edit aimed at
 # cybersecurity work (weights: huggingface.co/dealignai/GLM-5.3-CYBERSECURITY-FP8). It
-# always reasons: effort low and high are honored, any other value runs at max.
+# always reasons and accepts reasoning effort low or high only; any other value fails with 400.
 # glm-5.3-flash-abliterated takes the lightweight roles. Both: 1,048,576-token context,
 # 131,072 max output tokens. Prices in USD per 1M tokens from https://api.abliteratedllm.dev/v1/models.
 
@@ -86,7 +86,7 @@ adviser:
   n: 1
   max_tokens: 32768
   reasoning:
-    effort: max
+    effort: high
   price:
     input: 0.90
     output: 1.80
