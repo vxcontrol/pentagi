@@ -1,0 +1,179 @@
+# Nodecode provider configuration for Cyber v1 (nodecode-cyber-v1) on Nodecode's
+# OpenAI-compatible API at https://api.nodecode.ai/v1: DeepSeek V4.1 Flash 1017 with its
+# refusal direction removed from the weights (abliterated). 1,048,576-token context, up to
+# 131,072 output tokens, reasoning included.
+#
+# Thinking is controlled by the top-level reasoning_effort field, and the model thinks by
+# default. reasoning.mode "off" alone sends no field for a model name langchaingo does not
+# know, so the thinking-off agent types also set extra_body reasoning_effort "none". An
+# effort (minimal, low, medium, high, xhigh, max) is passed through as is. The quick and
+# structured agent types run with thinking off; the planning, coding and testing types
+# think at high, the same split as deepseek.provider.yml.
+#
+# Prices are USD per 1M tokens at weekday rates; from Friday 00:00 to Monday 00:00
+# (Europe/Amsterdam) every token costs half. A request over 262,144 input tokens pays 4x
+# cache_read for its cached input.
+
+simple:
+  model: nodecode-cyber-v1
+  temperature: 0.3
+  top_p: 0.9
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    mode: "off"
+  extra_body:
+    reasoning_effort: "none"
+  price:
+    input: 0.33
+    output: 1.32
+    cache_read: 0.009
+
+simple_json:
+  model: nodecode-cyber-v1
+  temperature: 0.3
+  top_p: 0.9
+  n: 1
+  max_tokens: 4096
+  json: true
+  reasoning:
+    mode: "off"
+  extra_body:
+    reasoning_effort: "none"
+  price:
+    input: 0.33
+    output: 1.32
+    cache_read: 0.009
+
+primary_agent:
+  model: nodecode-cyber-v1
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 0.33
+    output: 1.32
+    cache_read: 0.009
+
+assistant:
+  model: nodecode-cyber-v1
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 0.33
+    output: 1.32
+    cache_read: 0.009
+
+generator:
+  model: nodecode-cyber-v1
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    effort: high
+  price:
+    input: 0.33
+    output: 1.32
+    cache_read: 0.009
+
+refiner:
+  model: nodecode-cyber-v1
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    effort: high
+  price:
+    input: 0.33
+    output: 1.32
+    cache_read: 0.009
+
+adviser:
+  model: nodecode-cyber-v1
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 0.33
+    output: 1.32
+    cache_read: 0.009
+
+reflector:
+  model: nodecode-cyber-v1
+  temperature: 0.5
+  top_p: 0.9
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    mode: "off"
+  extra_body:
+    reasoning_effort: "none"
+  price:
+    input: 0.33
+    output: 1.32
+    cache_read: 0.009
+
+searcher:
+  model: nodecode-cyber-v1
+  temperature: 0.5
+  top_p: 0.9
+  n: 1
+  max_tokens: 4096
+  reasoning:
+    mode: "off"
+  extra_body:
+    reasoning_effort: "none"
+  price:
+    input: 0.33
+    output: 1.32
+    cache_read: 0.009
+
+enricher:
+  model: nodecode-cyber-v1
+  temperature: 0.5
+  top_p: 0.9
+  n: 1
+  max_tokens: 4096
+  reasoning:
+    mode: "off"
+  extra_body:
+    reasoning_effort: "none"
+  price:
+    input: 0.33
+    output: 1.32
+    cache_read: 0.009
+
+coder:
+  model: nodecode-cyber-v1
+  n: 1
+  max_tokens: 20480
+  reasoning:
+    effort: high
+  price:
+    input: 0.33
+    output: 1.32
+    cache_read: 0.009
+
+installer:
+  model: nodecode-cyber-v1
+  n: 1
+  max_tokens: 12288
+  reasoning:
+    effort: high
+  price:
+    input: 0.33
+    output: 1.32
+    cache_read: 0.009
+
+pentester:
+  model: nodecode-cyber-v1
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 0.33
+    output: 1.32
+    cache_read: 0.009

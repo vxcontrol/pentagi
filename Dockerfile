@@ -176,6 +176,7 @@ COPY examples/configs/deepinfra.provider.yml /opt/pentagi/conf/
 COPY examples/configs/deepseek.provider.yml /opt/pentagi/conf/
 COPY examples/configs/hcnsec.provider.yml /opt/pentagi/conf/
 COPY examples/configs/moonshot.provider.yml /opt/pentagi/conf/
+COPY examples/configs/nodecode.provider.yml /opt/pentagi/conf/
 COPY examples/configs/novita.provider.yml /opt/pentagi/conf/
 COPY examples/configs/nvidia-glm-5.1.provider.yml /opt/pentagi/conf/
 COPY examples/configs/ollama-cloud.provider.yml /opt/pentagi/conf/
