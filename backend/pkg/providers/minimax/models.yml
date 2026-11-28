@@ -8,6 +8,15 @@
     output: 1.20
     cache_read: 0.06
 
+- name: MiniMax-M3.1-Flash
+  description: MiniMax-M3.1-Flash - Fast M-series model with ~1M token context for agentic reasoning, tool use, code generation, and long-context tasks. Thinking is always on and cannot be turned off. Supports tool calling, JSON output, and streaming.
+  thinking: true
+  context_window: 1000000
+  price:
+    input: 0.15
+    output: 0.60
+    cache_read: 0.015
+
 - name: MiniMax-M2.7
   description: MiniMax-M2.7 - Previous flagship model with enhanced reasoning and coding capabilities. Supports tool calling, JSON output, and streaming. Thinking is always on and cannot be turned off. Recommended max_tokens 65536, ceiling 204800.
   release_date: 2026-03-18
